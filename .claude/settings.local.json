@@ -14,7 +14,13 @@
       "Bash(sleep 30 && powershell.exe -Command \"node --version; npm --version\" 2>&1)",
       "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\" && node --version && npm --version)",
       "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\" && cd \"D:/AI_Projects/ARQ/Thekedar_AI/Core_Thekedar\" && npm install 2>&1)",
-      "Bash(cmd.exe /c \"start http://localhost:5173\" 2>&1)"
+      "Bash(cmd.exe /c \"start http://localhost:5173\" 2>&1)",
+      "Bash(cd:*)",
+      "Bash(cmd /c \"cd /d D:\\\\AI_Projects\\\\ARQ\\\\Thekedar_AI\\\\Core_Thekedar && npm run build 2>&1\")",
+      "Bash(cmd /c \"cd /d D:\\\\AI_Projects\\\\ARQ\\\\Thekedar_AI\\\\Core_Thekedar && npx vite build 2>&1\")",
+      "Bash(cmd /c \"cd /d D:\\\\AI_Projects\\\\ARQ\\\\Thekedar_AI\\\\Core_Thekedar && npx vite build\" 2>&1)",
+      "Bash(powershell -Command \"Set-Location 'D:\\\\AI_Projects\\\\ARQ\\\\Thekedar_AI\\\\Core_Thekedar'; npx vite build 2>&1\")",
+      "Bash(powershell -Command \"Get-Command node,npm,npx -ErrorAction SilentlyContinue | Select Name,Source\")"
     ]
   }
 }
