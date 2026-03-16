@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ── CONSTANTS ──
 const PF_RATE=0.12,PF_CAP=15000,ESI_EE=0.0075,ESI_ER=0.0325,ESI_THRESH=21000,OT_MULT=2;
@@ -502,8 +502,8 @@ export default function App(){
           </div>
 
           <div style={{marginTop:16,display:"flex",gap:10}}>
-            <button style={{flex:1,padding:"12px",background:S.accent,color:"#000",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans'",fontSize:13}}>📄 Download PDF</button>
-            <button style={{flex:1,padding:"12px",background:"transparent",color:S.accent,border:`1px solid ${S.accent}`,borderRadius:10,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans'",fontSize:13}}>📎 Send via WhatsApp</button>
+            <button onClick={()=>alert("📄 Invoice PDF generation queued!\n\nIn production, this downloads a signed PDF with muster roll attached.")} style={{flex:1,padding:"12px",background:S.accent,color:"#000",border:"none",borderRadius:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans'",fontSize:13}}>📄 Download PDF</button>
+            <button onClick={()=>alert("📎 WhatsApp message drafted!\n\nIn production, this sends the invoice link to the client via WhatsApp Business API.")} style={{flex:1,padding:"12px",background:"transparent",color:S.accent,border:`1px solid ${S.accent}`,borderRadius:10,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans'",fontSize:13}}>📎 Send via WhatsApp</button>
           </div>
         </div>
       </div>}
