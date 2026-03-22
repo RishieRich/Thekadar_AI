@@ -1,66 +1,50 @@
-# Thekadar_AI
+# Thekedar AI
 
-Thekadar_AI is a front-end simulation of a contractor personal agent system. The current codebase is a browser-based React demo focused on labour operations, attendance, payroll, invoicing, worker records, and compliance tracking.
+Thekedar AI is currently a browser-based React + Vite demo for labour-contractor operations. This repository implements a single-page frontend that simulates March 2026 attendance, wage calculations, invoice math, worker records, and compliance reminders. The app mounts from `src/main.jsx`, and almost all application logic and UI live in `src/App.jsx`.
 
-## Current Status
+## What This Repository Contains Today
 
-This repository is no longer just a placeholder. It already contains a working Vite + React simulation with hard-coded demo data.
+- A Vite + React frontend application
+- A demo with hard-coded workers, sites, dates, and statutory values
+- In-memory state only, with no persistence layer
+- A Vercel deployment config for building the frontend
 
-- Single-page React app
-- Contractor workflow simulation for March 2026
-- Rule-based chat assistant for common labour and payroll questions
-- Vercel deployment config included
+## What The App Does
 
-## What The Demo Currently Does
-
-- Shows a dashboard with worker totals, gross wages, net payable, invoice totals, attendance, and compliance reminders
-- Provides an AI chat style panel for attendance, wages, invoice, PF, ESI, compliance, and worker queries
-- Lets you toggle attendance states in a muster-roll style table
-- Calculates wages, overtime, PF, ESI, gross pay, and net pay for each worker
-- Generates a simulated invoice summary with service charge and GST
-- Displays worker cards with site, wage, identity details, attendance, and pay results
-- Tracks statutory items like PF, ESI, CLRA returns, and wage payment deadlines
-
-## Tech Stack
-
-- React 18
-- React DOM 18
-- Vite 5
-- Inline component styling inside `src/App.jsx`
-- Vercel for deployment
-
-## Project Structure
-
-- `index.html` - Vite entry HTML
-- `src/main.jsx` - React mount point
-- `src/App.jsx` - main simulation UI, hard-coded worker data, calculations, and chat logic
-- `package.json` - scripts and dependencies
-- `vite.config.js` - Vite config
-- `vercel.json` - deployment config
-
-## Simulation Modules In The Current App
-
-The current interface contains these main sections:
+The current UI is organized into these sections:
 
 - `Dashboard`
 - `AI Chat`
-- `Attendance`
-- `Wages`
-- `Invoice`
-- `Workers`
+- `Haziri (Attendance)`
+- `Tankhwah (Wages)`
+- `Invoice / Bill`
+- `Workers / Majdoor`
 - `Compliance`
 
-The app also includes:
+The implemented behavior currently includes:
 
-- 10 sample workers
-- 2 sample sites: `Tema India` and `Sudhir Brothers`
-- seeded attendance for March 2026
-- worker-wise wage and deduction calculations
-- site-level filtering
+- Site filtering for `All`, `Tema India`, and `Sudhir Brothers`
+- A dashboard with worker totals, wage totals, invoice totals, attendance summaries, and compliance reminders
+- A chat-style helper that answers keyword-driven queries for attendance, wages, invoice, PF, ESI, compliance, help, and worker lookups
+- A March 2026 attendance grid where editable cells cycle through `P`, `A`, `HD`, and `OT`, while Sundays are seeded as `WO`
+- Worker-level calculations for effective days, basic wages, overtime, PF, ESI, gross pay, and net pay
+- A simulated invoice view with employer PF, employer ESI, 10% service charge, and 18% GST
+- Worker cards showing role, site, wage, attendance percentage, gross pay, net pay, UAN, and ESI number
+- A compliance screen with registration status cards, a filing calendar, and CLRA register items
 
-## Business Rules In The Simulation
+## How The Demo Works
 
-The current calculations in `src/App.jsx` use these rules:
+### Data
+
+All business data is defined directly in `src/App.jsx`.
+
+- `10` workers are hard-coded in the `WORKERS` array
+- `2` sites are hard-coded in the `SITES` array: `Tema India` and `Sudhir Brothers`
+- Attendance is seeded for March 2026 when the app loads
+
+### Calculation Rules
+
+The current wage and deduction logic uses these fixed rules:
 
 - PF employee contribution: `12%`
 - PF employer contribution: `12%`
@@ -69,60 +53,104 @@ The current calculations in `src/App.jsx` use these rules:
 - ESI employer contribution: `3.25%`
 - ESI threshold: `21000`
 - Overtime multiplier: `2`
-- Sundays are auto-marked as `WO`
 
-## Running The Project Locally
+### Behavior Notes
+
+- Attendance seeding uses `Math.random()`, so the initial demo data can change after a refresh
+- The `"today"` / `"aaj"` chat response also uses random present/absent selection
+- Attendance changes are stored only in React state, so they reset on refresh
+- The `Download PDF` and `WhatsApp karo` buttons currently show alert messages only
+
+## What This Project Is Not
+
+This repository does not currently include:
+
+- A backend
+- A database
+- Authentication
+- External business APIs
+- Real AI or LLM integration
+- Persistent storage
+- Automated tests
+
+## Runtime Stack
+
+- `react`
+- `react-dom`
+- `vite`
+- `@vitejs/plugin-react`
+
+Repo-level runtime details:
+
+- The project uses ES modules (`"type": "module"` in `package.json`)
+- `index.html` loads `DM Sans` and `DM Mono` from Google Fonts
+- `vercel.json` builds with `npm run build` and outputs to `dist`
+
+## Project Structure
+
+```text
+.
+|-- index.html
+|-- package.json
+|-- vite.config.js
+|-- vercel.json
+`-- src/
+    |-- main.jsx
+    `-- App.jsx
+```
+
+File roles:
+
+- `index.html`: Root HTML document and font loading
+- `src/main.jsx`: React mount point
+- `src/App.jsx`: Demo data, calculations, chat logic, and main UI
+- `package.json`: Scripts and dependencies
+- `vite.config.js`: Vite configuration
+- `vercel.json`: Deployment configuration
+
+## Local Development
 
 ### Prerequisites
 
-- Node.js 18 or newer
-- `npm`
+- Node.js
+- npm
 
-### Development
+### Install
 
 ```bash
 npm install
+```
+
+### Start The Development Server
+
+```bash
 npm run dev
 ```
 
-Open the local Vite URL shown in the terminal, usually `http://localhost:5173`.
-
-### Production Build
+### Create A Production Build
 
 ```bash
 npm run build
+```
+
+### Preview The Production Build
+
+```bash
 npm run preview
 ```
 
 ## Deployment
 
-The repository includes a `vercel.json` configured for a Vite build:
+`vercel.json` is configured with:
 
+- Framework: `vite`
 - Build command: `npm run build`
 - Output directory: `dist`
 
 ## Current Limitations
 
-- All major UI and simulation logic are inside a single `src/App.jsx` file
-- There is no backend, database, login, or API integration
-- The chat assistant is keyword-based and not connected to a real AI model
-- Data is hard-coded for demo use
-- No automated tests are present
-- Some UI text appears to have character encoding artifacts and should be cleaned up
-
-## Recommended Next Steps
-
-1. Split `src/App.jsx` into smaller feature components
-2. Move data and payroll logic into separate modules
-3. Replace keyword chat with an actual AI or API-backed assistant
-4. Add persistence for attendance, wage sheets, and invoice state
-5. Add tests for payroll and compliance calculations
-6. Improve text encoding and clean up UI copy
-
-## Contributing
-
-Use focused branches and clear commits. If the simulation grows, add issue templates, contribution guidelines, and a pull request checklist.
-
-## License
-
-No license file is currently present in the repository. Add a `LICENSE` file when you are ready to define reuse and distribution terms.
+- Core logic and UI are concentrated in a single `src/App.jsx` file
+- Worker data, compliance data, invoice metadata, and dates are hard-coded
+- The chat assistant is rule-based string matching, not model-backed AI
+- Some strings in the source show character-encoding artifacts
+- No `LICENSE` file is present in the repository
