@@ -705,7 +705,7 @@ function App() {
                       <div>
                         <h4>{worker.name}</h4>
                         <p>
-                          {worker.role || "No role"} · {workerSite?.name || "Unassigned"}
+                          {worker.role || "No role"} - {workerSite?.name || "Unassigned"}
                         </p>
                       </div>
                       <div className="button-row">
@@ -737,7 +737,7 @@ function App() {
                       </div>
                     </div>
                     <p className="muted" style={{ marginTop: 12 }}>
-                      {formatCurrency(worker.dailyWage)} per day · {worker.active ? "Active" : "Inactive"}
+                      {formatCurrency(worker.dailyWage)} per day - {worker.active ? "Active" : "Inactive"}
                     </p>
                   </div>
                 );
@@ -1022,7 +1022,7 @@ function App() {
         <div className="page-header">
           <div>
             <h2>{tab === "dashboard" ? "Live Operations" : NAV_ITEMS.find((item) => item.id === tab)?.label}</h2>
-            <p>{company.businessName || "Configure your business in Setup"} · {monthLabel(month)}</p>
+            <p>{company.businessName || "Configure your business in Setup"} - {monthLabel(month)}</p>
           </div>
           <div className="toolbar">
             <div className="field" style={{ minWidth: 170 }}>

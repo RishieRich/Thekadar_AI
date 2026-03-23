@@ -1,156 +1,239 @@
 # Thekedar AI
 
-Thekedar AI is currently a browser-based React + Vite demo for labour-contractor operations. This repository implements a single-page frontend that simulates March 2026 attendance, wage calculations, invoice math, worker records, and compliance reminders. The app mounts from `src/main.jsx`, and almost all application logic and UI live in `src/App.jsx`.
+## Current Status
 
-## What This Repository Contains Today
+This repository is no longer the original hard-coded frontend demo.
 
-- A Vite + React frontend application
-- A demo with hard-coded workers, sites, dates, and statutory values
-- In-memory state only, with no persistence layer
-- A Vercel deployment config for building the frontend
+It is now a small full-stack MVP for labour-contractor operations with:
 
-## What The App Does
+- a React + Vite frontend
+- a local Node HTTP API server
+- JSON-file persistence on disk
+- shared payroll and attendance logic used by both frontend and backend
+- an optional Grok-backed chat endpoint that keeps the API key on the server
 
-The current UI is organized into these sections:
+The current setup is suitable as a local or single-instance MVP. It is not yet a multi-tenant production system.
+
+## What The App Currently Does
+
+The UI currently provides these sections:
 
 - `Dashboard`
+- `Setup`
+- `Attendance`
+- `Payroll`
+- `Invoice`
 - `AI Chat`
-- `Haziri (Attendance)`
-- `Tankhwah (Wages)`
-- `Invoice / Bill`
-- `Workers / Majdoor`
-- `Compliance`
 
-The implemented behavior currently includes:
+Implemented behavior:
 
-- Site filtering for `All`, `Tema India`, and `Sudhir Brothers`
-- A dashboard with worker totals, wage totals, invoice totals, attendance summaries, and compliance reminders
-- A chat-style helper that answers keyword-driven queries for attendance, wages, invoice, PF, ESI, compliance, help, and worker lookups
-- A March 2026 attendance grid where editable cells cycle through `P`, `A`, `HD`, and `OT`, while Sundays are seeded as `WO`
-- Worker-level calculations for effective days, basic wages, overtime, PF, ESI, gross pay, and net pay
-- A simulated invoice view with employer PF, employer ESI, 10% service charge, and 18% GST
-- Worker cards showing role, site, wage, attendance percentage, gross pay, net pay, UAN, and ESI number
-- A compliance screen with registration status cards, a filing calendar, and CLRA register items
+- Edit contractor/company details
+- Edit payroll and invoice rules such as PF, ESI, GST, service charge, and OT multiplier
+- Add, edit, and delete sites
+- Add, edit, and delete workers
+- Store month-wise attendance per worker
+- Calculate payroll from attendance and configured rules
+- Generate invoice totals from payroll outputs
+- Filter views by month and site
+- Ask Grok questions about the currently loaded contractor data
 
-## How The Demo Works
+## Architecture
 
-### Data
+### Frontend
 
-All business data is defined directly in `src/App.jsx`.
+- `src/App.jsx`
+  Main React app and current UI shell.
+- `src/api.js`
+  Thin fetch wrapper for the backend API.
+- `src/app.css`
+  Application styling.
+- `src/main.jsx`
+  React entry point.
 
-- `10` workers are hard-coded in the `WORKERS` array
-- `2` sites are hard-coded in the `SITES` array: `Tema India` and `Sudhir Brothers`
-- Attendance is seeded for March 2026 when the app loads
+The frontend calls `/api/*` routes and does not contain any hard-coded business data anymore.
 
-### Calculation Rules
+### Backend
 
-The current wage and deduction logic uses these fixed rules:
+- `server.mjs`
+  Local Node HTTP server. Exposes the REST API and can also serve the built frontend from `dist/`.
+- `server/store.mjs`
+  File-backed storage layer. Creates `data/store.json` on first run and seeds it with sample company, sites, workers, and attendance.
+- `grok.mjs`
+  Server-side Grok integration. Sends current company/site/worker/month context to the xAI API.
 
-- PF employee contribution: `12%`
-- PF employer contribution: `12%`
-- PF wage cap: `15000`
-- ESI employee contribution: `0.75%`
-- ESI employer contribution: `3.25%`
-- ESI threshold: `21000`
-- Overtime multiplier: `2`
+### Shared Business Logic
 
-### Behavior Notes
+- `shared/payroll.js`
+  Shared attendance helpers, payroll rules, totals, and invoice calculations. This is the main source of truth for business math in the repo.
 
-- Attendance seeding uses `Math.random()`, so the initial demo data can change after a refresh
-- The `"today"` / `"aaj"` chat response also uses random present/absent selection
-- Attendance changes are stored only in React state, so they reset on refresh
-- The `Download PDF` and `WhatsApp karo` buttons currently show alert messages only
+## Persistence Model
 
-## What This Project Is Not
+The app stores data in a local JSON file:
 
-This repository does not currently include:
+- `data/store.json`
 
-- A backend
-- A database
-- Authentication
-- External business APIs
-- Real AI or LLM integration
-- Persistent storage
-- Automated tests
+This file is created automatically by the server on first run and is ignored by git.
 
-## Runtime Stack
+Stored entities:
 
-- `react`
-- `react-dom`
-- `vite`
-- `@vitejs/plugin-react`
+- `company`
+- `sites`
+- `workers`
+- `attendance`
 
-Repo-level runtime details:
+Attendance is stored by month key in `YYYY-MM` format.
 
-- The project uses ES modules (`"type": "module"` in `package.json`)
-- `index.html` loads `DM Sans` and `DM Mono` from Google Fonts
-- `vercel.json` builds with `npm run build` and outputs to `dist`
+If a month or worker has no stored attendance yet, default attendance is generated in memory with:
 
-## Project Structure
+- Sundays defaulting to `WO`
+- other days defaulting to `A`
 
-```text
-.
-|-- index.html
-|-- package.json
-|-- vite.config.js
-|-- vercel.json
-`-- src/
-    |-- main.jsx
-    `-- App.jsx
-```
+## Current API Surface
 
-File roles:
+The backend currently exposes these routes:
 
-- `index.html`: Root HTML document and font loading
-- `src/main.jsx`: React mount point
-- `src/App.jsx`: Demo data, calculations, chat logic, and main UI
-- `package.json`: Scripts and dependencies
-- `vite.config.js`: Vite configuration
-- `vercel.json`: Deployment configuration
+- `GET /api/health`
+- `GET /api/bootstrap?month=YYYY-MM`
+- `PUT /api/company`
+- `POST /api/sites`
+- `PUT /api/sites/:id`
+- `DELETE /api/sites/:id`
+- `POST /api/workers`
+- `PUT /api/workers/:id`
+- `DELETE /api/workers/:id`
+- `PUT /api/attendance`
+- `POST /api/chat`
 
-## Local Development
+`/api/bootstrap` is the main frontend bootstrap call. It returns:
 
-### Prerequisites
+- company
+- sites
+- workers
+- attendance for the selected month
 
-- Node.js
-- npm
+## Grok Integration
 
-### Install
+The Grok integration is server-side only.
+
+Required environment variable:
+
+- `XAI_API_KEY`
+
+Optional:
+
+- `XAI_MODEL`
+- `PORT`
+
+See `.env.example`.
+
+The chat flow currently works like this:
+
+1. The frontend sends conversation messages plus the selected month and site filter.
+2. The backend rebuilds current business context from local data.
+3. `grok.mjs` sends that context to xAI.
+4. The assistant reply is returned to the frontend.
+
+The system prompt instructs Grok not to invent missing business facts.
+
+## Frontend Behavior Notes
+
+- Month selection is based on `YYYY-MM`.
+- Attendance cells cycle through `P`, `A`, `HD`, `OT`, and `WO`.
+- Payroll and invoice values are recalculated from current state on every render.
+- Site filtering affects the currently displayed payroll, invoice, attendance, and dashboard values.
+- The frontend expects the API server to be available at `/api`.
+
+## Development Workflow
+
+### Install dependencies
 
 ```bash
 npm install
 ```
 
-### Start The Development Server
+### Run the backend
+
+```bash
+npm run server
+```
+
+This starts the Node API on `http://localhost:8787` by default.
+
+### Run the frontend
+
+In another terminal:
 
 ```bash
 npm run dev
 ```
 
-### Create A Production Build
+Vite is configured to proxy `/api` to `http://localhost:8787` during development.
+
+### Build the frontend
 
 ```bash
 npm run build
 ```
 
-### Preview The Production Build
+### Serve built frontend plus API from one process
+
+After building:
 
 ```bash
-npm run preview
+npm run start
 ```
 
-## Deployment
+`server.mjs` will serve API routes and static files from `dist/`.
 
-`vercel.json` is configured with:
+## Current File Layout
 
-- Framework: `vite`
-- Build command: `npm run build`
-- Output directory: `dist`
+```text
+.
+|-- .env.example
+|-- .gitignore
+|-- grok.mjs
+|-- index.html
+|-- package.json
+|-- package-lock.json
+|-- README.md
+|-- server.mjs
+|-- server/
+|   `-- store.mjs
+|-- shared/
+|   `-- payroll.js
+`-- src/
+    |-- App.jsx
+    |-- api.js
+    |-- app.css
+    `-- main.jsx
+```
 
-## Current Limitations
+Generated and intentionally not kept in the repo:
 
-- Core logic and UI are concentrated in a single `src/App.jsx` file
-- Worker data, compliance data, invoice metadata, and dates are hard-coded
-- The chat assistant is rule-based string matching, not model-backed AI
-- Some strings in the source show character-encoding artifacts
-- No `LICENSE` file is present in the repository
+- `node_modules/`
+- `dist/`
+- `data/`
+
+## Important Cleanup Notes
+
+This repo has been cleaned to remove stale or non-essential items from the working tree, including generated output and editor-specific files. The codebase should now reflect only the source files needed to understand and continue the app.
+
+## Known Limitations
+
+- No authentication or user isolation
+- No real database yet; persistence is local JSON only
+- No PDF generation or export pipeline
+- No WhatsApp or external business integrations
+- No automated tests
+- No schema migration layer for persisted data
+- No deployment configuration for a real hosted backend yet
+
+## Best Next Steps For The Next LLM
+
+If another model continues from here, the most natural next work items are:
+
+1. Replace JSON-file persistence with a real database.
+2. Add authentication and contractor/user separation.
+3. Add validation and error-handling hardening around API writes.
+4. Add invoice export and attendance/payroll export flows.
+5. Add tests for `shared/payroll.js` and the API routes.
