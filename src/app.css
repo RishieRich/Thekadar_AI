@@ -62,6 +62,8 @@ button {
   position: sticky;
   top: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
@@ -132,6 +134,70 @@ button {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.logout-btn {
+  width: 100%;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Login page */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 40px 36px;
+  text-align: center;
+}
+
+.login-title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.login-sub {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.login-note {
+  margin: 20px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Import section */
+.import-templates {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-templates a {
+  text-decoration: none;
 }
 
 .main {

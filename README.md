@@ -1,239 +1,268 @@
-# Thekedar AI
+# Thekedar AI — Contractor Operations Platform
 
-## Current Status
+A real-data labour contractor management platform built on React + Vite (frontend) and a plain Node.js HTTP server (backend). Each contractor logs in with their own credentials and manages their own isolated data — workers, sites, attendance, payroll, and invoices — completely separately from other contractors.
 
-This repository is no longer the original hard-coded frontend demo.
+---
 
-It is now a small full-stack MVP for labour-contractor operations with:
+## What's In This Version
 
-- a React + Vite frontend
-- a local Node HTTP API server
-- JSON-file persistence on disk
-- shared payroll and attendance logic used by both frontend and backend
-- an optional Grok-backed chat endpoint that keeps the API key on the server
+| Feature | Status |
+|---|---|
+| Multi-contractor login (credential-based, JWT session) | Done |
+| Per-contractor isolated data store | Done |
+| Dashboard — wages, net payable, invoice total, site summary | Done |
+| Setup — company profile, compliance rates, sites, workers (add/edit/delete) | Done |
+| Bulk CSV import for sites and workers (one-time setup) | Done |
+| Attendance register — click to cycle P / A / HD / OT / WO | Done |
+| Payroll breakdown with PF and ESI calculation | Done |
+| Invoice with GST and service charge | Done |
+| AI Chat via Grok (xAI API) | Done |
+| Local file-based storage (no external DB needed for dev) | Done |
+| Vercel deployment with Upstash KV storage | Done |
 
-The current setup is suitable as a local or single-instance MVP. It is not yet a multi-tenant production system.
+---
 
-## What The App Currently Does
+## Local Development Setup
 
-The UI currently provides these sections:
+### Prerequisites
 
-- `Dashboard`
-- `Setup`
-- `Attendance`
-- `Payroll`
-- `Invoice`
-- `AI Chat`
+- Node.js 18 or later
+- npm
 
-Implemented behavior:
-
-- Edit contractor/company details
-- Edit payroll and invoice rules such as PF, ESI, GST, service charge, and OT multiplier
-- Add, edit, and delete sites
-- Add, edit, and delete workers
-- Store month-wise attendance per worker
-- Calculate payroll from attendance and configured rules
-- Generate invoice totals from payroll outputs
-- Filter views by month and site
-- Ask Grok questions about the currently loaded contractor data
-
-## Architecture
-
-### Frontend
-
-- `src/App.jsx`
-  Main React app and current UI shell.
-- `src/api.js`
-  Thin fetch wrapper for the backend API.
-- `src/app.css`
-  Application styling.
-- `src/main.jsx`
-  React entry point.
-
-The frontend calls `/api/*` routes and does not contain any hard-coded business data anymore.
-
-### Backend
-
-- `server.mjs`
-  Local Node HTTP server. Exposes the REST API and can also serve the built frontend from `dist/`.
-- `server/store.mjs`
-  File-backed storage layer. Creates `data/store.json` on first run and seeds it with sample company, sites, workers, and attendance.
-- `grok.mjs`
-  Server-side Grok integration. Sends current company/site/worker/month context to the xAI API.
-
-### Shared Business Logic
-
-- `shared/payroll.js`
-  Shared attendance helpers, payroll rules, totals, and invoice calculations. This is the main source of truth for business math in the repo.
-
-## Persistence Model
-
-The app stores data in a local JSON file:
-
-- `data/store.json`
-
-This file is created automatically by the server on first run and is ignored by git.
-
-Stored entities:
-
-- `company`
-- `sites`
-- `workers`
-- `attendance`
-
-Attendance is stored by month key in `YYYY-MM` format.
-
-If a month or worker has no stored attendance yet, default attendance is generated in memory with:
-
-- Sundays defaulting to `WO`
-- other days defaulting to `A`
-
-## Current API Surface
-
-The backend currently exposes these routes:
-
-- `GET /api/health`
-- `GET /api/bootstrap?month=YYYY-MM`
-- `PUT /api/company`
-- `POST /api/sites`
-- `PUT /api/sites/:id`
-- `DELETE /api/sites/:id`
-- `POST /api/workers`
-- `PUT /api/workers/:id`
-- `DELETE /api/workers/:id`
-- `PUT /api/attendance`
-- `POST /api/chat`
-
-`/api/bootstrap` is the main frontend bootstrap call. It returns:
-
-- company
-- sites
-- workers
-- attendance for the selected month
-
-## Grok Integration
-
-The Grok integration is server-side only.
-
-Required environment variable:
-
-- `XAI_API_KEY`
-
-Optional:
-
-- `XAI_MODEL`
-- `PORT`
-
-See `.env.example`.
-
-The chat flow currently works like this:
-
-1. The frontend sends conversation messages plus the selected month and site filter.
-2. The backend rebuilds current business context from local data.
-3. `grok.mjs` sends that context to xAI.
-4. The assistant reply is returned to the frontend.
-
-The system prompt instructs Grok not to invent missing business facts.
-
-## Frontend Behavior Notes
-
-- Month selection is based on `YYYY-MM`.
-- Attendance cells cycle through `P`, `A`, `HD`, `OT`, and `WO`.
-- Payroll and invoice values are recalculated from current state on every render.
-- Site filtering affects the currently displayed payroll, invoice, attendance, and dashboard values.
-- The frontend expects the API server to be available at `/api`.
-
-## Development Workflow
-
-### Install dependencies
+### Steps
 
 ```bash
+# 1. Install dependencies
 npm install
-```
 
-### Run the backend
+# 2. Copy the example env file and edit it
+cp .env.example .env
+# Edit .env — set contractor credentials and JWT_SECRET at minimum
 
-```bash
-npm run server
-```
-
-This starts the Node API on `http://localhost:8787` by default.
-
-### Run the frontend
-
-In another terminal:
-
-```bash
-npm run dev
-```
-
-Vite is configured to proxy `/api` to `http://localhost:8787` during development.
-
-### Build the frontend
-
-```bash
+# 3. Build the frontend
 npm run build
+
+# 4. Start the server
+npm start
+# Server runs at http://localhost:8787
 ```
 
-### Serve built frontend plus API from one process
-
-After building:
+For frontend hot-reload during development:
 
 ```bash
-npm run start
+# Terminal 1 — backend
+npm start
+
+# Terminal 2 — Vite dev server (proxies /api to port 8787)
+npm run dev
+# Open http://localhost:5173
 ```
 
-`server.mjs` will serve API routes and static files from `dist/`.
+---
 
-## Current File Layout
+## Environment Variables
 
-```text
-.
-|-- .env.example
-|-- .gitignore
-|-- grok.mjs
-|-- index.html
-|-- package.json
-|-- package-lock.json
-|-- README.md
-|-- server.mjs
-|-- server/
-|   `-- store.mjs
-|-- shared/
-|   `-- payroll.js
-`-- src/
-    |-- App.jsx
-    |-- api.js
-    |-- app.css
-    `-- main.jsx
+All variables live in `.env` (copy from `.env.example`). Never commit `.env` to git.
+
+### Required for the app to work
+
+| Variable | Description |
+|---|---|
+| `C1_USERNAME` | Login username for contractor 1 |
+| `C1_PASSWORD` | Login password for contractor 1 (plain text, hashed internally) |
+| `C1_ID` | Unique ID for contractor 1's data namespace (e.g. `c1`) |
+| `C2_USERNAME` | Login username for contractor 2 |
+| `C2_PASSWORD` | Login password for contractor 2 |
+| `C2_ID` | Unique ID for contractor 2's data namespace (e.g. `c2`) |
+| `JWT_SECRET` | Random secret for signing session tokens — **set a strong value in production** |
+
+Generate a secure `JWT_SECRET`:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Generated and intentionally not kept in the repo:
+### Required for AI Chat
 
-- `node_modules/`
-- `dist/`
-- `data/`
+| Variable | Description |
+|---|---|
+| `XAI_API_KEY` | Your xAI API key from console.x.ai |
+| `XAI_MODEL` | Model to use (default: `grok-3-mini`). Verify available models in your xAI dashboard. |
 
-## Important Cleanup Notes
+AI Chat will show an error in the chat window if `XAI_API_KEY` is missing. All other features work without it.
 
-This repo has been cleaned to remove stale or non-essential items from the working tree, including generated output and editor-specific files. The codebase should now reflect only the source files needed to understand and continue the app.
+### Required for Vercel production deployment
 
-## Known Limitations
+| Variable | Description |
+|---|---|
+| `KV_REST_API_URL` | Auto-set by Vercel when you connect a KV store |
+| `KV_REST_API_TOKEN` | Auto-set by Vercel when you connect a KV store |
 
-- No authentication or user isolation
-- No real database yet; persistence is local JSON only
-- No PDF generation or export pipeline
-- No WhatsApp or external business integrations
-- No automated tests
-- No schema migration layer for persisted data
-- No deployment configuration for a real hosted backend yet
+If these are not set, the app falls back to local file-based storage. On Vercel, the filesystem is read-only (ephemeral), so KV must be configured.
 
-## Best Next Steps For The Next LLM
+---
 
-If another model continues from here, the most natural next work items are:
+## Contractor Credentials Setup
 
-1. Replace JSON-file persistence with a real database.
-2. Add authentication and contractor/user separation.
-3. Add validation and error-handling hardening around API writes.
-4. Add invoice export and attendance/payroll export flows.
-5. Add tests for `shared/payroll.js` and the API routes.
+Each contractor slot uses three env vars:
+
+```
+C1_USERNAME=ramesh_contractors
+C1_PASSWORD=MySecretPass@2025
+C1_ID=c1
+
+C2_USERNAME=suresh_builders
+C2_PASSWORD=AnotherPass@2025
+C2_ID=c2
+```
+
+The password is stored only as a SHA-256 hash at runtime — the plain text never persists. The `C1_ID` / `C2_ID` value is used as the data namespace key; once set, do not change it or data will become unreachable.
+
+---
+
+## CSV Import (One-Time Setup)
+
+Go to **Setup > Bulk Import from CSV**. Download the templates, fill them in, and upload.
+
+### Sites CSV format
+
+```
+Site Name,Client Name,Location
+Tema India,Tema India Pvt Ltd,"Achhad, Talasari"
+Sudhir Brothers,Sudhir Brothers Ltd,Vasai
+```
+
+### Workers CSV format
+
+```
+Name,Role,Daily Wage,UAN,ESI Number,Site Name
+Ramesh Patel,Fitter,650,100123456789,3112345678,Tema India
+Suresh Yadav,Welder,750,100123456790,3112345679,Tema India
+Dinesh Kumar,Electrician,700,100123456793,3112345682,Sudhir Brothers
+```
+
+**Notes:**
+- `Site Name` in the workers CSV must match a site name exactly (case-insensitive).
+- Workers with an identical name + site combination are skipped to prevent duplicates.
+- Sites that already exist by name are skipped.
+- After import, you can edit or delete any entry from the Setup tab.
+
+---
+
+## Deploying to Vercel
+
+### Step 1 — Push to GitHub
+
+```bash
+git add .
+git commit -m "production ready"
+git push
+```
+
+### Step 2 — Import project in Vercel
+
+1. Go to vercel.com and import your GitHub repository.
+2. Vercel auto-detects Vite. No build settings need to change — `vercel.json` handles everything.
+
+### Step 3 — Add Vercel KV (free storage)
+
+1. In Vercel dashboard: **Storage > Create Database > KV**.
+2. Create a store (free Hobby tier is sufficient for 2 contractors).
+3. Click **Connect to Project** — this auto-adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` to your project env vars.
+
+### Step 4 — Set environment variables
+
+In Vercel dashboard under **Settings > Environment Variables**, add:
+
+```
+C1_USERNAME        your_contractor_1_username
+C1_PASSWORD        your_contractor_1_password
+C1_ID              c1
+C2_USERNAME        your_contractor_2_username
+C2_PASSWORD        your_contractor_2_password
+C2_ID              c2
+JWT_SECRET         (generate with the command above)
+XAI_API_KEY        (from console.x.ai — optional, needed only for AI Chat)
+XAI_MODEL          grok-3-mini
+```
+
+Do **not** manually set `KV_REST_API_URL` or `KV_REST_API_TOKEN` — Vercel sets those automatically from the KV store connection.
+
+### Step 5 — Deploy
+
+Click **Deploy** (or push a new commit). The app will be live at your `.vercel.app` URL.
+
+---
+
+## Data Storage Architecture
+
+```
+Local development          Vercel production
+─────────────────          ─────────────────
+data/
+  c1/store.json    <-->    Upstash Redis key: store:c1
+  c2/store.json    <-->    Upstash Redis key: store:c2
+```
+
+Each contractor's data is completely isolated. Data includes company profile, sites, workers, and all attendance records across all months.
+
+**Important:** On first login for a new contractor ID, seed data (2 demo sites, 6 demo workers) is created automatically. Replace or delete it via the Setup tab.
+
+---
+
+## What Each Contractor Does Daily
+
+1. Open the app URL and sign in.
+2. Go to **Attendance** — tap cells to mark P / A / HD / OT / WO for each worker for the day.
+3. Check **Dashboard** for live wage totals and site summaries.
+4. At month end, go to **Payroll** for the full breakdown and **Invoice** for the client invoice.
+5. Use **AI Chat** to ask operational questions in plain language.
+
+---
+
+## Important Things Before Going Live
+
+### Passwords
+- Passwords are SHA-256 hashed at runtime. Acceptable for a small internal tool.
+- **JWT_SECRET must be a strong random value in production.** A weak secret allows session tokens to be forged.
+- To change a password: update the env var in Vercel dashboard and redeploy.
+
+### xAI Model Name
+The default is `grok-3-mini`. Verify the exact model IDs available on your xAI plan at console.x.ai and update `XAI_MODEL`. If the model name is wrong, AI Chat will return an API error.
+
+### Vercel KV Free Tier Limits
+- 10,000 requests per day
+- 256 MB storage
+- For 2 contractors with daily use this is more than sufficient. Monitor usage in the Upstash dashboard if needed.
+
+### No Automatic Session Expiry
+JWT tokens are stored in browser localStorage and expire only when the user clicks Sign Out. If a device is lost, change the `JWT_SECRET` and redeploy — this invalidates all existing sessions.
+
+### Data Backup
+On Vercel, data lives in Upstash Redis. Export it periodically from the Upstash console (Data Browser > Export). For local dev, data is in `data/{id}/store.json` — back up that folder.
+
+### Contractor ID Must Not Change
+The `C1_ID` / `C2_ID` values map directly to the storage key. If you change `C1_ID` from `c1` to something else, contractor 1 will get a fresh (seed) dataset and the old data will be orphaned in the store under the old key.
+
+---
+
+## Project Structure
+
+```
+api/
+  handler.js          Vercel serverless entry point
+server/
+  auth.mjs            JWT + credential authentication
+  kv.mjs              Storage abstraction (file or Upstash)
+  router.mjs          All API route handlers with auth middleware
+  store.mjs           Multi-tenant data read/write
+shared/
+  payroll.js          Payroll calculation logic (shared frontend/backend)
+src/
+  App.jsx             Main React app (login, tabs, CSV import)
+  api.js              Frontend API client (auth-aware)
+  app.css             Styles
+grok.mjs              xAI Grok chat integration
+server.mjs            Local Node.js HTTP server
+vercel.json           Vercel deployment config
+.env.example          All required environment variables documented
+```

@@ -1,26 +1,23 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import { kvGet, kvSet } from "./kv.mjs";
 import { createDefaultAttendanceMap, monthKeyFromDate } from "../shared/payroll.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const dataDir = path.resolve(__dirname, "..", "data");
-const dbPath = path.join(dataDir, "store.json");
+// Per-contractor in-memory cache (keyed by contractorId)
+const cacheMap = new Map();
+
+function storeKey(contractorId) {
+  return `store:${contractorId}`;
+}
 
 function createSeedAttendance(monthKey, workerId, offset) {
   const attendance = createDefaultAttendanceMap(monthKey, {});
 
   for (const [day, current] of Object.entries(attendance)) {
-    if (current === "WO") {
-      continue;
-    }
-
-    const numericDay = Number(day);
-    if ((numericDay + offset) % 11 === 0) attendance[day] = "A";
-    else if ((numericDay + offset) % 7 === 0) attendance[day] = "OT";
-    else if ((numericDay + offset) % 5 === 0) attendance[day] = "HD";
+    if (current === "WO") continue;
+    const n = Number(day);
+    if ((n + offset) % 11 === 0) attendance[day] = "A";
+    else if ((n + offset) % 7 === 0) attendance[day] = "OT";
+    else if ((n + offset) % 5 === 0) attendance[day] = "HD";
     else attendance[day] = "P";
   }
 
@@ -43,13 +40,13 @@ function createSeedData() {
 
   const attendance = {
     [monthKey]: Object.fromEntries(
-      workers.map((worker, index) => [worker.id, createSeedAttendance(monthKey, worker.id, index + 1)]),
+      workers.map((w, i) => [w.id, createSeedAttendance(monthKey, w.id, i + 1)]),
     ),
   };
 
   return {
     company: {
-      businessName: "Thekedar AI Contractors",
+      businessName: "My Labour Contracting",
       ownerName: "",
       phone: "",
       email: "",
@@ -69,51 +66,38 @@ function createSeedData() {
       overtimeMultiplier: 2,
     },
     sites: [
-      { id: siteOneId, name: "Tema India", clientName: "Tema India", location: "Achhad, Talasari" },
-      { id: siteTwoId, name: "Sudhir Brothers", clientName: "Sudhir Brothers", location: "Achhad, Talasari" },
+      { id: siteOneId, name: "Site One", clientName: "Client One", location: "" },
+      { id: siteTwoId, name: "Site Two", clientName: "Client Two", location: "" },
     ],
     workers,
     attendance,
   };
 }
 
-async function ensureDb() {
-  await mkdir(dataDir, { recursive: true });
-
-  try {
-    const raw = await readFile(dbPath, "utf8");
-    return JSON.parse(raw);
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      throw error;
-    }
-
-    const seed = createSeedData();
-    await writeFile(dbPath, JSON.stringify(seed, null, 2));
-    return seed;
-  }
+async function ensureDb(contractorId) {
+  const data = await kvGet(storeKey(contractorId));
+  if (data) return data;
+  const seed = createSeedData();
+  await kvSet(storeKey(contractorId), seed);
+  return seed;
 }
 
-let cachePromise = null;
-
-export async function readDb() {
-  if (!cachePromise) {
-    cachePromise = ensureDb();
+export async function readDb(contractorId) {
+  if (!cacheMap.has(contractorId)) {
+    cacheMap.set(contractorId, ensureDb(contractorId));
   }
-
-  const db = await cachePromise;
+  const db = await cacheMap.get(contractorId);
   return structuredClone(db);
 }
 
-export async function writeDb(nextDb) {
-  cachePromise = Promise.resolve(structuredClone(nextDb));
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(dbPath, JSON.stringify(nextDb, null, 2));
+export async function writeDb(contractorId, nextDb) {
+  cacheMap.set(contractorId, Promise.resolve(structuredClone(nextDb)));
+  await kvSet(storeKey(contractorId), nextDb);
   return structuredClone(nextDb);
 }
 
-export async function updateDb(mutator) {
-  const current = await readDb();
+export async function updateDb(contractorId, mutator) {
+  const current = await readDb(contractorId);
   const next = await mutator(current);
-  return writeDb(next);
+  return writeDb(contractorId, next);
 }

@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import "./app.css";
 import {
+  clearToken,
   createSite,
   createWorker,
   deleteSite,
   deleteWorker,
   getBootstrap,
+  getToken,
+  importBatch,
+  login,
+  logout,
   saveCompany,
   sendChat,
   updateAttendance,
@@ -36,15 +41,7 @@ function emptySiteForm() {
 }
 
 function emptyWorkerForm() {
-  return {
-    name: "",
-    role: "",
-    dailyWage: "",
-    uan: "",
-    esiNumber: "",
-    siteId: "",
-    active: true,
-  };
+  return { name: "", role: "", dailyWage: "", uan: "", esiNumber: "", siteId: "", active: true };
 }
 
 function companyFormFromCompany(company) {
@@ -70,6 +67,49 @@ function companyFormFromCompany(company) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Simple CSV parser (handles quoted fields with commas)
+// ---------------------------------------------------------------------------
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim().split("\n");
+  if (lines.length < 2) return [];
+
+  function parseLine(line) {
+    const values = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === "," && !inQuotes) {
+        values.push(current.trim());
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  }
+
+  const headers = parseLine(lines[0]).map((h) => h.replace(/^"|"$/g, ""));
+  return lines.slice(1)
+    .filter((l) => l.trim())
+    .map((line) => {
+      const values = parseLine(line);
+      return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Shared components
+// ---------------------------------------------------------------------------
 function Field({ label, children, full = false }) {
   return (
     <div className={`field${full ? " full" : ""}`}>
@@ -89,7 +129,72 @@ function MetricCard({ label, value, sub }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Login page
+// ---------------------------------------------------------------------------
+function LoginPage({ onLogin }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!username.trim() || !password) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await login(username.trim(), password);
+      onLogin(data.token);
+    } catch (err) {
+      setError(err.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card surface">
+        <div className="brand-badge" style={{ margin: "0 auto 18px" }}>TK</div>
+        <h1 className="login-title">Thekedar AI</h1>
+        <p className="login-sub">Sign in to your contractor account</p>
+        <form className="stack" onSubmit={handleSubmit} style={{ marginTop: 24 }}>
+          <Field label="Username">
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              autoFocus
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </Field>
+          {error && <div className="status-pill error">{error}</div>}
+          <button className="btn login-btn" type="submit" disabled={loading || !username.trim() || !password}>
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </form>
+        <p className="login-note">
+          Contact your administrator if you don&apos;t have credentials.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main app
+// ---------------------------------------------------------------------------
 function App() {
+  const [authenticated, setAuthenticated] = useState(() => Boolean(getToken()));
   const [tab, setTab] = useState("dashboard");
   const [month, setMonth] = useState(monthKeyFromDate());
   const [siteFilter, setSiteFilter] = useState("all");
@@ -117,10 +222,26 @@ function App() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
+  // CSV import state
+  const [importSitesText, setImportSitesText] = useState("");
+  const [importWorkersText, setImportWorkersText] = useState("");
+  const [importPreview, setImportPreview] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+
+  function handleLogin(token) {
+    setToken(token);
+    setAuthenticated(true);
+  }
+
+  async function handleLogout() {
+    await logout();
+    clearToken();
+    setAuthenticated(false);
+  }
+
   async function loadBootstrap(targetMonth = month) {
     setLoading(true);
     setError("");
-
     try {
       const data = await getBootstrap(targetMonth);
       setCompany(data.company);
@@ -128,8 +249,7 @@ function App() {
       setWorkers(data.workers);
       setAttendance(data.attendance);
       setCompanyForm(companyFormFromCompany(data.company));
-
-      if (siteFilter !== "all" && !data.sites.some((site) => site.id === siteFilter)) {
+      if (siteFilter !== "all" && !data.sites.some((s) => s.id === siteFilter)) {
         setSiteFilter("all");
       }
     } catch (loadError) {
@@ -140,8 +260,8 @@ function App() {
   }
 
   useEffect(() => {
-    loadBootstrap(month);
-  }, [month]);
+    if (authenticated) loadBootstrap(month);
+  }, [month, authenticated]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -156,7 +276,7 @@ function App() {
     siteId: siteFilter,
   });
 
-  const selectedSite = siteFilter === "all" ? null : sites.find((site) => site.id === siteFilter);
+  const selectedSite = siteFilter === "all" ? null : sites.find((s) => s.id === siteFilter);
 
   function clearMessages() {
     setError("");
@@ -171,7 +291,6 @@ function App() {
   async function withBusy(work) {
     setBusy(true);
     clearMessages();
-
     try {
       await work();
     } catch (actionError) {
@@ -182,15 +301,15 @@ function App() {
   }
 
   function updateCompanyField(name, value) {
-    setCompanyForm((current) => ({ ...current, [name]: value }));
+    setCompanyForm((c) => ({ ...c, [name]: value }));
   }
 
   function updateSiteField(name, value) {
-    setSiteForm((current) => ({ ...current, [name]: value }));
+    setSiteForm((c) => ({ ...c, [name]: value }));
   }
 
   function updateWorkerField(name, value) {
-    setWorkerForm((current) => ({ ...current, [name]: value }));
+    setWorkerForm((c) => ({ ...c, [name]: value }));
   }
 
   async function handleSaveCompany(event) {
@@ -213,7 +332,6 @@ function App() {
         await createSite(siteForm);
         announce("Site added.");
       }
-
       setSiteForm(emptySiteForm());
       setEditingSiteId("");
       await loadBootstrap(month);
@@ -224,12 +342,9 @@ function App() {
     if (!window.confirm("Delete this site? Workers assigned to it must be moved or removed first.")) {
       return;
     }
-
     await withBusy(async () => {
       await deleteSite(siteId);
-      if (siteFilter === siteId) {
-        setSiteFilter("all");
-      }
+      if (siteFilter === siteId) setSiteFilter("all");
       announce("Site deleted.");
       await loadBootstrap(month);
     });
@@ -245,7 +360,6 @@ function App() {
         await createWorker(workerForm);
         announce("Worker added.");
       }
-
       setWorkerForm(emptyWorkerForm());
       setEditingWorkerId("");
       await loadBootstrap(month);
@@ -253,10 +367,7 @@ function App() {
   }
 
   async function handleDeleteWorker(workerId) {
-    if (!window.confirm("Delete this worker and all stored attendance for them?")) {
-      return;
-    }
-
+    if (!window.confirm("Delete this worker and all stored attendance for them?")) return;
     await withBusy(async () => {
       await deleteWorker(workerId);
       announce("Worker deleted.");
@@ -272,10 +383,7 @@ function App() {
 
     setAttendance((current) => ({
       ...current,
-      [workerId]: {
-        ...currentAttendance,
-        [day]: nextStatus,
-      },
+      [workerId]: { ...currentAttendance, [day]: nextStatus },
     }));
 
     try {
@@ -290,9 +398,7 @@ function App() {
   async function handleSendChat(event) {
     event.preventDefault();
     const trimmed = chatInput.trim();
-    if (!trimmed || chatLoading) {
-      return;
-    }
+    if (!trimmed || chatLoading) return;
 
     const userMessage = { role: "user", content: trimmed };
     const nextMessages = [...chatMessages, userMessage];
@@ -312,6 +418,72 @@ function App() {
       setChatLoading(false);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // CSV import helpers
+  // ---------------------------------------------------------------------------
+
+  function handleSitesFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setImportSitesText(e.target.result || "");
+    reader.readAsText(file);
+  }
+
+  function handleWorkersFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setImportWorkersText(e.target.result || "");
+    reader.readAsText(file);
+  }
+
+  function handlePreviewImport() {
+    const parsedSites = importSitesText.trim() ? parseCSV(importSitesText) : [];
+    const parsedWorkers = importWorkersText.trim() ? parseCSV(importWorkersText) : [];
+
+    const mappedSites = parsedSites.map((row) => ({
+      name: row["Site Name"] || row.name || "",
+      clientName: row["Client Name"] || row.clientName || "",
+      location: row["Location"] || row.location || "",
+    }));
+
+    const mappedWorkers = parsedWorkers.map((row) => ({
+      name: row["Name"] || row.name || "",
+      role: row["Role"] || row.role || "",
+      dailyWage: row["Daily Wage"] || row.dailyWage || 0,
+      uan: row["UAN"] || row.uan || "",
+      esiNumber: row["ESI Number"] || row.esiNumber || "",
+      siteName: row["Site Name"] || row.siteName || "",
+    }));
+
+    setImportPreview({ sites: mappedSites, workers: mappedWorkers });
+  }
+
+  async function handleRunImport() {
+    if (!importPreview) return;
+    setImportBusy(true);
+    clearMessages();
+    try {
+      const result = await importBatch(importPreview);
+      announce(
+        `Import complete. Total sites: ${result.imported.sites}, total workers: ${result.imported.workers}.`,
+      );
+      setImportPreview(null);
+      setImportSitesText("");
+      setImportWorkersText("");
+      await loadBootstrap(month);
+    } catch (importError) {
+      setError(importError.message);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab renderers
+  // ---------------------------------------------------------------------------
 
   function renderDashboard() {
     return (
@@ -400,133 +572,64 @@ function App() {
             <Field label="Business Name">
               <input
                 value={companyForm.businessName}
-                onChange={(event) => updateCompanyField("businessName", event.target.value)}
+                onChange={(e) => updateCompanyField("businessName", e.target.value)}
                 placeholder="Shree Ganesh Labour Contractor"
               />
             </Field>
             <Field label="Owner Name">
-              <input
-                value={companyForm.ownerName}
-                onChange={(event) => updateCompanyField("ownerName", event.target.value)}
-              />
+              <input value={companyForm.ownerName} onChange={(e) => updateCompanyField("ownerName", e.target.value)} />
             </Field>
             <Field label="Phone">
-              <input
-                value={companyForm.phone}
-                onChange={(event) => updateCompanyField("phone", event.target.value)}
-              />
+              <input value={companyForm.phone} onChange={(e) => updateCompanyField("phone", e.target.value)} />
             </Field>
             <Field label="Email">
-              <input
-                value={companyForm.email}
-                onChange={(event) => updateCompanyField("email", event.target.value)}
-              />
+              <input value={companyForm.email} onChange={(e) => updateCompanyField("email", e.target.value)} />
             </Field>
             <Field label="Address" full>
-              <textarea
-                value={companyForm.address}
-                onChange={(event) => updateCompanyField("address", event.target.value)}
-              />
+              <textarea value={companyForm.address} onChange={(e) => updateCompanyField("address", e.target.value)} />
             </Field>
             <Field label="GSTIN">
-              <input
-                value={companyForm.gstin}
-                onChange={(event) => updateCompanyField("gstin", event.target.value)}
-              />
+              <input value={companyForm.gstin} onChange={(e) => updateCompanyField("gstin", e.target.value)} />
             </Field>
             <Field label="CLRA License">
-              <input
-                value={companyForm.clraLicense}
-                onChange={(event) => updateCompanyField("clraLicense", event.target.value)}
-              />
+              <input value={companyForm.clraLicense} onChange={(e) => updateCompanyField("clraLicense", e.target.value)} />
             </Field>
             <Field label="PF Registration">
-              <input
-                value={companyForm.pfRegistration}
-                onChange={(event) => updateCompanyField("pfRegistration", event.target.value)}
-              />
+              <input value={companyForm.pfRegistration} onChange={(e) => updateCompanyField("pfRegistration", e.target.value)} />
             </Field>
             <Field label="ESI Registration">
-              <input
-                value={companyForm.esiRegistration}
-                onChange={(event) => updateCompanyField("esiRegistration", event.target.value)}
-              />
+              <input value={companyForm.esiRegistration} onChange={(e) => updateCompanyField("esiRegistration", e.target.value)} />
             </Field>
             <Field label="Service Charge %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.serviceChargeRate}
-                onChange={(event) => updateCompanyField("serviceChargeRate", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.serviceChargeRate} onChange={(e) => updateCompanyField("serviceChargeRate", e.target.value)} />
             </Field>
             <Field label="GST %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.gstRate}
-                onChange={(event) => updateCompanyField("gstRate", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.gstRate} onChange={(e) => updateCompanyField("gstRate", e.target.value)} />
             </Field>
             <Field label="PF Employee %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.pfEmployeeRate}
-                onChange={(event) => updateCompanyField("pfEmployeeRate", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.pfEmployeeRate} onChange={(e) => updateCompanyField("pfEmployeeRate", e.target.value)} />
             </Field>
             <Field label="PF Employer %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.pfEmployerRate}
-                onChange={(event) => updateCompanyField("pfEmployerRate", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.pfEmployerRate} onChange={(e) => updateCompanyField("pfEmployerRate", e.target.value)} />
             </Field>
             <Field label="PF Wage Cap">
-              <input
-                type="number"
-                value={companyForm.pfCap}
-                onChange={(event) => updateCompanyField("pfCap", event.target.value)}
-              />
+              <input type="number" value={companyForm.pfCap} onChange={(e) => updateCompanyField("pfCap", e.target.value)} />
             </Field>
             <Field label="ESI Employee %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.esiEmployeeRate}
-                onChange={(event) => updateCompanyField("esiEmployeeRate", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.esiEmployeeRate} onChange={(e) => updateCompanyField("esiEmployeeRate", e.target.value)} />
             </Field>
             <Field label="ESI Employer %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.esiEmployerRate}
-                onChange={(event) => updateCompanyField("esiEmployerRate", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.esiEmployerRate} onChange={(e) => updateCompanyField("esiEmployerRate", e.target.value)} />
             </Field>
             <Field label="ESI Threshold">
-              <input
-                type="number"
-                value={companyForm.esiThreshold}
-                onChange={(event) => updateCompanyField("esiThreshold", event.target.value)}
-              />
+              <input type="number" value={companyForm.esiThreshold} onChange={(e) => updateCompanyField("esiThreshold", e.target.value)} />
             </Field>
             <Field label="OT Multiplier">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.overtimeMultiplier}
-                onChange={(event) => updateCompanyField("overtimeMultiplier", event.target.value)}
-              />
+              <input type="number" step="0.01" value={companyForm.overtimeMultiplier} onChange={(e) => updateCompanyField("overtimeMultiplier", e.target.value)} />
             </Field>
           </div>
           <div className="button-row" style={{ marginTop: 16 }}>
-            <button className="btn" type="submit" disabled={busy}>
-              Save company settings
-            </button>
+            <button className="btn" type="submit" disabled={busy}>Save company settings</button>
           </div>
         </form>
 
@@ -536,25 +639,13 @@ function App() {
             <form className="stack" onSubmit={handleSaveSite}>
               <div className="field-grid">
                 <Field label="Site Name">
-                  <input
-                    value={siteForm.name}
-                    onChange={(event) => updateSiteField("name", event.target.value)}
-                    placeholder="Tema India"
-                  />
+                  <input value={siteForm.name} onChange={(e) => updateSiteField("name", e.target.value)} placeholder="Tema India" />
                 </Field>
                 <Field label="Client Name">
-                  <input
-                    value={siteForm.clientName}
-                    onChange={(event) => updateSiteField("clientName", event.target.value)}
-                    placeholder="Tema India"
-                  />
+                  <input value={siteForm.clientName} onChange={(e) => updateSiteField("clientName", e.target.value)} placeholder="Tema India" />
                 </Field>
                 <Field label="Location" full>
-                  <input
-                    value={siteForm.location}
-                    onChange={(event) => updateSiteField("location", event.target.value)}
-                    placeholder="Achhad, Talasari"
-                  />
+                  <input value={siteForm.location} onChange={(e) => updateSiteField("location", e.target.value)} placeholder="Achhad, Talasari" />
                 </Field>
               </div>
               <div className="button-row">
@@ -565,10 +656,7 @@ function App() {
                   <button
                     className="btn-ghost"
                     type="button"
-                    onClick={() => {
-                      setEditingSiteId("");
-                      setSiteForm(emptySiteForm());
-                    }}
+                    onClick={() => { setEditingSiteId(""); setSiteForm(emptySiteForm()); }}
                   >
                     Cancel edit
                   </button>
@@ -590,27 +678,15 @@ function App() {
                         type="button"
                         onClick={() => {
                           setEditingSiteId(site.id);
-                          setSiteForm({
-                            name: site.name,
-                            clientName: site.clientName,
-                            location: site.location,
-                          });
+                          setSiteForm({ name: site.name, clientName: site.clientName, location: site.location });
                         }}
                       >
                         Edit
                       </button>
-                      <button
-                        className="btn-ghost btn-danger"
-                        type="button"
-                        onClick={() => handleDeleteSite(site.id)}
-                      >
-                        Delete
-                      </button>
+                      <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteSite(site.id)}>Delete</button>
                     </div>
                   </div>
-                  <p className="muted" style={{ marginTop: 12 }}>
-                    {site.location || "No location set"}
-                  </p>
+                  <p className="muted" style={{ marginTop: 12 }}>{site.location || "No location set"}</p>
                 </div>
               ))}
             </div>
@@ -621,56 +697,32 @@ function App() {
             <form className="stack" onSubmit={handleSaveWorker}>
               <div className="field-grid">
                 <Field label="Worker Name">
-                  <input
-                    value={workerForm.name}
-                    onChange={(event) => updateWorkerField("name", event.target.value)}
-                    placeholder="Ramesh Patel"
-                  />
+                  <input value={workerForm.name} onChange={(e) => updateWorkerField("name", e.target.value)} placeholder="Ramesh Patel" />
                 </Field>
                 <Field label="Role">
-                  <input
-                    value={workerForm.role}
-                    onChange={(event) => updateWorkerField("role", event.target.value)}
-                    placeholder="Fitter"
-                  />
+                  <input value={workerForm.role} onChange={(e) => updateWorkerField("role", e.target.value)} placeholder="Fitter" />
                 </Field>
                 <Field label="Daily Wage">
-                  <input
-                    type="number"
-                    value={workerForm.dailyWage}
-                    onChange={(event) => updateWorkerField("dailyWage", event.target.value)}
-                    placeholder="650"
-                  />
+                  <input type="number" value={workerForm.dailyWage} onChange={(e) => updateWorkerField("dailyWage", e.target.value)} placeholder="650" />
                 </Field>
                 <Field label="Site">
-                  <select
-                    value={workerForm.siteId}
-                    onChange={(event) => updateWorkerField("siteId", event.target.value)}
-                  >
+                  <select value={workerForm.siteId} onChange={(e) => updateWorkerField("siteId", e.target.value)}>
                     <option value="">Unassigned</option>
                     {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
-                        {site.name}
-                      </option>
+                      <option key={site.id} value={site.id}>{site.name}</option>
                     ))}
                   </select>
                 </Field>
                 <Field label="UAN">
-                  <input
-                    value={workerForm.uan}
-                    onChange={(event) => updateWorkerField("uan", event.target.value)}
-                  />
+                  <input value={workerForm.uan} onChange={(e) => updateWorkerField("uan", e.target.value)} />
                 </Field>
                 <Field label="ESI Number">
-                  <input
-                    value={workerForm.esiNumber}
-                    onChange={(event) => updateWorkerField("esiNumber", event.target.value)}
-                  />
+                  <input value={workerForm.esiNumber} onChange={(e) => updateWorkerField("esiNumber", e.target.value)} />
                 </Field>
                 <Field label="Status">
                   <select
                     value={workerForm.active ? "active" : "inactive"}
-                    onChange={(event) => updateWorkerField("active", event.target.value === "active")}
+                    onChange={(e) => updateWorkerField("active", e.target.value === "active")}
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -685,10 +737,7 @@ function App() {
                   <button
                     className="btn-ghost"
                     type="button"
-                    onClick={() => {
-                      setEditingWorkerId("");
-                      setWorkerForm(emptyWorkerForm());
-                    }}
+                    onClick={() => { setEditingWorkerId(""); setWorkerForm(emptyWorkerForm()); }}
                   >
                     Cancel edit
                   </button>
@@ -698,15 +747,13 @@ function App() {
 
             <div className="stack" style={{ marginTop: 18 }}>
               {workers.map((worker) => {
-                const workerSite = sites.find((site) => site.id === worker.siteId);
+                const workerSite = sites.find((s) => s.id === worker.siteId);
                 return (
                   <div className="list-card" key={worker.id}>
                     <div className="list-header">
                       <div>
                         <h4>{worker.name}</h4>
-                        <p>
-                          {worker.role || "No role"} - {workerSite?.name || "Unassigned"}
-                        </p>
+                        <p>{worker.role || "No role"} - {workerSite?.name || "Unassigned"}</p>
                       </div>
                       <div className="button-row">
                         <button
@@ -727,13 +774,7 @@ function App() {
                         >
                           Edit
                         </button>
-                        <button
-                          className="btn-ghost btn-danger"
-                          type="button"
-                          onClick={() => handleDeleteWorker(worker.id)}
-                        >
-                          Delete
-                        </button>
+                        <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteWorker(worker.id)}>Delete</button>
                       </div>
                     </div>
                     <p className="muted" style={{ marginTop: 12 }}>
@@ -744,6 +785,88 @@ function App() {
               })}
             </div>
           </div>
+        </div>
+
+        {/* CSV Import Section */}
+        <div className="surface panel">
+          <h3 className="section-title">Bulk Import from CSV</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            One-time setup: upload CSV files to populate sites and workers. Existing entries with
+            the same name are skipped. Download the sample templates below.
+          </p>
+
+          <div className="import-templates" style={{ marginTop: 12 }}>
+            <a
+              className="btn-ghost"
+              href="data:text/csv;charset=utf-8,Site Name,Client Name,Location%0ATema India,Tema India Pvt Ltd,Achhad Talasari"
+              download="sites_template.csv"
+            >
+              Download Sites Template
+            </a>
+            <a
+              className="btn-ghost"
+              href="data:text/csv;charset=utf-8,Name,Role,Daily Wage,UAN,ESI Number,Site Name%0ARamesh Patel,Fitter,650,100123456789,3112345678,Tema India"
+              download="workers_template.csv"
+            >
+              Download Workers Template
+            </a>
+          </div>
+
+          <div className="split" style={{ marginTop: 16 }}>
+            <Field label="Sites CSV">
+              <input type="file" accept=".csv,text/csv" onChange={handleSitesFileChange} />
+            </Field>
+            <Field label="Workers CSV">
+              <input type="file" accept=".csv,text/csv" onChange={handleWorkersFileChange} />
+            </Field>
+          </div>
+
+          <div className="button-row" style={{ marginTop: 12 }}>
+            <button
+              className="btn-ghost"
+              type="button"
+              onClick={handlePreviewImport}
+              disabled={!importSitesText && !importWorkersText}
+            >
+              Preview Import
+            </button>
+          </div>
+
+          {importPreview && (
+            <div className="import-preview stack" style={{ marginTop: 16 }}>
+              <p>
+                <strong>{importPreview.sites.length}</strong> sites and{" "}
+                <strong>{importPreview.workers.length}</strong> workers ready to import.
+              </p>
+              {importPreview.sites.length > 0 && (
+                <div className="mini-card">
+                  <h4>Sites</h4>
+                  {importPreview.sites.map((s, i) => (
+                    <p key={i}>{s.name} - {s.clientName || "no client"}</p>
+                  ))}
+                </div>
+              )}
+              {importPreview.workers.length > 0 && (
+                <div className="mini-card">
+                  <h4>Workers</h4>
+                  {importPreview.workers.slice(0, 10).map((w, i) => (
+                    <p key={i}>{w.name} ({w.role}) - {w.siteName || "unassigned"} - {w.dailyWage}/day</p>
+                  ))}
+                  {importPreview.workers.length > 10 && (
+                    <p className="muted">...and {importPreview.workers.length - 10} more</p>
+                  )}
+                </div>
+              )}
+              <div className="button-row">
+                <button className="btn" type="button" onClick={handleRunImport} disabled={importBusy}>
+                  {importBusy ? "Importing..." : "Confirm Import"}
+                </button>
+                <button className="btn-ghost" type="button" onClick={() => setImportPreview(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -766,9 +889,7 @@ function App() {
                   <th>Worker</th>
                   <th>Site</th>
                   {totalDays.map((day) => (
-                    <th className="attendance-cell" key={day}>
-                      {day}
-                    </th>
+                    <th className="attendance-cell" key={day}>{day}</th>
                   ))}
                 </tr>
               </thead>
@@ -777,9 +898,7 @@ function App() {
                   <tr key={row.id}>
                     <td>
                       <div>{row.name}</div>
-                      <div className="muted" style={{ marginTop: 4 }}>
-                        {row.role || "No role"}
-                      </div>
+                      <div className="muted" style={{ marginTop: 4 }}>{row.role || "No role"}</div>
                     </td>
                     <td>{row.siteName}</td>
                     {totalDays.map((day) => (
@@ -834,9 +953,7 @@ function App() {
                   <tr key={row.id}>
                     <td>
                       <div>{row.name}</div>
-                      <div className="muted" style={{ marginTop: 4 }}>
-                        {formatCurrency(row.dailyWage)}/day
-                      </div>
+                      <div className="muted" style={{ marginTop: 4 }}>{formatCurrency(row.dailyWage)}/day</div>
                     </td>
                     <td>{row.siteName}</td>
                     <td>{row.payroll.present}</td>
@@ -871,19 +988,14 @@ function App() {
             <div className="mini-card">
               <h4>{company.businessName || "Business name pending"}</h4>
               <p>{company.address || "Add the company address in Setup."}</p>
-              <p style={{ marginTop: 10 }}>
-                Client: {selectedSite?.clientName || "All active clients"}
-              </p>
+              <p style={{ marginTop: 10 }}>Client: {selectedSite?.clientName || "All active clients"}</p>
             </div>
             <div className="mini-card">
               <h4>Line Items</h4>
               <p>Gross wages: {formatCurrency(monthModel.totals.gross)}</p>
               <p>Employer PF: {formatCurrency(monthModel.totals.pfEmployer)}</p>
               <p>Employer ESI: {formatCurrency(monthModel.totals.esiEmployer)}</p>
-              <p>
-                Service charge ({monthModel.rules.serviceChargeRate}%):{" "}
-                {formatCurrency(monthModel.totals.serviceCharge)}
-              </p>
+              <p>Service charge ({monthModel.rules.serviceChargeRate}%): {formatCurrency(monthModel.totals.serviceCharge)}</p>
               <p>Sub-total: {formatCurrency(monthModel.totals.subTotal)}</p>
               <p>GST ({monthModel.rules.gstRate}%): {formatCurrency(monthModel.totals.gstAmount)}</p>
             </div>
@@ -895,9 +1007,7 @@ function App() {
           <p className="metric-value" style={{ marginTop: 12 }}>
             {formatCurrency(monthModel.totals.invoiceTotal)}
           </p>
-          <p className="muted">
-            This is driven by the actual workers, attendance, and rules in the local store.
-          </p>
+          <p className="muted">Driven by actual workers, attendance, and rules in your account.</p>
           <div className="stack" style={{ marginTop: 18 }}>
             <div className="mini-card">
               <h4>Registrations To Print On Invoice</h4>
@@ -942,14 +1052,12 @@ function App() {
             <Field label="Ask About Current Operations" full>
               <textarea
                 value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
+                onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Who has the highest net pay this month? Which site has the biggest wage bill?"
               />
             </Field>
             <div className="button-row">
-              <button className="btn" type="submit" disabled={chatLoading}>
-                Send to Grok
-              </button>
+              <button className="btn" type="submit" disabled={chatLoading}>Send to Grok</button>
             </div>
           </form>
         </div>
@@ -990,6 +1098,11 @@ function App() {
     return renderDashboard();
   };
 
+  // Show login page if not authenticated
+  if (!authenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -997,7 +1110,7 @@ function App() {
           <div className="brand-badge">TK</div>
           <div>
             <h1>Thekedar AI</h1>
-            <p>Real contractor operations MVP</p>
+            <p>{company.businessName || "Your business"}</p>
           </div>
         </div>
         <div className="nav-list">
@@ -1013,8 +1126,10 @@ function App() {
             </button>
           ))}
         </div>
-        <div className="sidebar-note">
-          This version stores contractor data on the server side and removes the hard-coded demo state.
+        <div className="sidebar-footer">
+          <button className="btn-ghost logout-btn" type="button" onClick={handleLogout}>
+            Sign Out
+          </button>
         </div>
       </aside>
 
@@ -1027,7 +1142,7 @@ function App() {
           <div className="toolbar">
             <div className="field" style={{ minWidth: 170 }}>
               <label>Month</label>
-              <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
             </div>
             <div className="pill-row">
               <button
@@ -1048,18 +1163,14 @@ function App() {
                 </button>
               ))}
             </div>
-            <button className="btn-ghost" onClick={() => loadBootstrap(month)} type="button">
-              Reload
-            </button>
+            <button className="btn-ghost" onClick={() => loadBootstrap(month)} type="button">Reload</button>
           </div>
         </div>
 
         {error && <div className="status-pill error">{error}</div>}
         {!error && notice && <div className="status-pill">{notice}</div>}
         {loading ? (
-          <div className="surface panel" style={{ marginTop: 16 }}>
-            Loading contractor data...
-          </div>
+          <div className="surface panel" style={{ marginTop: 16 }}>Loading contractor data...</div>
         ) : (
           <div style={{ marginTop: 16 }}>{renderActiveTab()}</div>
         )}
