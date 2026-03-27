@@ -12,6 +12,7 @@ import {
   login,
   logout,
   saveCompany,
+  setToken,
   sendChat,
   updateAttendance,
   updateSite,
