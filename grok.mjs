@@ -1,19 +1,7 @@
 import { calculateMonthModel, monthLabel } from "./shared/payroll.js";
 
-const XAI_BASE_URL = process.env.XAI_BASE_URL || "https://api.x.ai/v1";
-const XAI_MODEL = process.env.XAI_MODEL || "grok-4.20-reasoning";
-
-function fallbackOutput(response) {
-  for (const item of response.output || []) {
-    for (const content of item.content || []) {
-      if (content.type === "output_text" && content.text) {
-        return content.text;
-      }
-    }
-  }
-
-  return "";
-}
+const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 function buildContext({ company, sites, workers, attendanceByWorker, monthKey, siteId }) {
   const monthModel = calculateMonthModel({
@@ -70,8 +58,8 @@ function buildContext({ company, sites, workers, attendanceByWorker, monthKey, s
 }
 
 export async function createGrokReply({ messages, company, sites, workers, attendanceByWorker, monthKey, siteId = "all" }) {
-  if (!process.env.XAI_API_KEY) {
-    throw new Error("Missing XAI_API_KEY. Add it to your environment before using AI chat.");
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("Missing GROQ_API_KEY. Add it to your .env file before using AI chat.");
   }
 
   const safeMessages = Array.isArray(messages)
@@ -83,63 +71,49 @@ export async function createGrokReply({ messages, company, sites, workers, atten
   }
 
   const context = buildContext({ company, sites, workers, attendanceByWorker, monthKey, siteId });
-  const input = [
+
+  const chatMessages = [
     {
       role: "system",
-      content: [
-        {
-          type: "input_text",
-          text: "You are Thekedar AI, an operations assistant for Indian labour contractors. Use only the supplied company, site, worker, attendance, payroll, and invoice context. Do not invent registrations, counts, or payment values. If data is missing, say so directly. Keep answers concise, operational, and businesslike.",
-        },
-      ],
+      content: "You are Thekedar AI, an operations assistant for Indian labour contractors. Use only the supplied company, site, worker, attendance, payroll, and invoice context. Do not invent registrations, counts, or payment values. If data is missing, say so directly. Keep answers concise, operational, and businesslike. Respond in simple Hindi/Hinglish (Roman script) when appropriate.",
     },
     {
       role: "system",
-      content: [
-        {
-          type: "input_text",
-          text: `Current business context JSON:\n${JSON.stringify(context)}`,
-        },
-      ],
+      content: `Current business context JSON:\n${JSON.stringify(context)}`,
     },
     ...safeMessages.map((message) => ({
       role: message.role === "assistant" ? "assistant" : "user",
-      content: [
-        {
-          type: "input_text",
-          text: String(message.content),
-        },
-      ],
+      content: String(message.content),
     })),
   ];
 
-  const response = await fetch(`${XAI_BASE_URL}/responses`, {
+  const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.XAI_API_KEY}`,
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: XAI_MODEL,
-      input,
+      model: GROQ_MODEL,
+      messages: chatMessages,
     }),
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const message = data?.error?.message || `xAI API request failed with status ${response.status}`;
+    const message = data?.error?.message || `Groq API request failed with status ${response.status}`;
     throw new Error(message);
   }
 
-  const text = String(data.output_text || fallbackOutput(data) || "").trim();
+  const text = String(data.choices?.[0]?.message?.content || "").trim();
 
   if (!text) {
-    throw new Error("xAI API returned an empty response.");
+    throw new Error("Groq API returned an empty response.");
   }
 
   return {
-    model: XAI_MODEL,
+    model: GROQ_MODEL,
     text,
   };
 }
