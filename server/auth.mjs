@@ -42,6 +42,8 @@ export function getContractors() {
         id: c.id,
         username: c.username,
         passwordHash: c.passwordHash || hashPassword(c.password || ""),
+        pin: c.pin || "",
+        label: c.label || c.id,
       }));
     } catch {
       return [];
@@ -54,7 +56,9 @@ export function getContractors() {
     const password = process.env[`C${i}_PASSWORD`];
     if (!username || !password) break;
     const id = process.env[`C${i}_ID`] || `contractor${i}`;
-    contractors.push({ id, username, passwordHash: hashPassword(password) });
+    const pin = process.env[`C${i}_PIN`] || "";
+    const label = process.env[`C${i}_LABEL`] || id;
+    contractors.push({ id, username, passwordHash: hashPassword(password), pin, label });
   }
   return contractors;
 }
@@ -66,7 +70,15 @@ export function authenticate(username, password) {
     (c) => c.username === username && c.passwordHash === hash,
   );
   if (!found) return null;
-  return { id: found.id, token: createToken(found.id) };
+  return { id: found.id, token: createToken(found.id), label: found.label };
+}
+
+export function authenticateByPin(pin) {
+  if (!pin || String(pin).length !== 4) return null;
+  const contractors = getContractors();
+  const found = contractors.find((c) => c.pin && c.pin === String(pin));
+  if (!found) return null;
+  return { id: found.id, token: createToken(found.id), label: found.label };
 }
 
 export function verifyRequest(req) {

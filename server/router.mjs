@@ -1,12 +1,14 @@
 import crypto from "node:crypto";
-import { authenticate, verifyRequest } from "./auth.mjs";
+import { authenticate, authenticateByPin, verifyRequest } from "./auth.mjs";
 import { readDb, updateDb } from "./store.mjs";
 import { createGrokReply } from "../grok.mjs";
 import {
   ATTENDANCE_STATUSES,
+  calculateMonthModel,
   createDefaultAttendanceMap,
   ensureMonthAttendance,
   monthKeyFromDate,
+  monthLabel,
 } from "../shared/payroll.js";
 
 // ---------------------------------------------------------------------------
@@ -141,12 +143,21 @@ export async function handleRequest(req, res) {
 
     if (pathname === "/api/login" && req.method === "POST") {
       const body = await readJsonBody(req);
-      const result = authenticate(sanitizeText(body.username), sanitizeText(body.password));
-      if (!result) {
-        json(res, 401, { error: "Invalid username or password." });
-        return;
+      let result;
+      if (body.pin !== undefined) {
+        result = authenticateByPin(sanitizeText(body.pin));
+        if (!result) {
+          json(res, 401, { error: "Galat PIN — dobara try karo" });
+          return;
+        }
+      } else {
+        result = authenticate(sanitizeText(body.username), sanitizeText(body.password));
+        if (!result) {
+          json(res, 401, { error: "Invalid username or password." });
+          return;
+        }
       }
-      json(res, 200, { token: result.token, contractorId: result.id });
+      json(res, 200, { token: result.token, contractorId: result.id, label: result.label });
       return;
     }
 
@@ -384,6 +395,194 @@ export async function handleRequest(req, res) {
         sites: db.sites,
         workers: db.workers,
       });
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // Excel wage export
+    // -----------------------------------------------------------------------
+
+    if (pathname === "/api/export/wages" && req.method === "GET") {
+      const monthKey = searchParams.get("month") || monthKeyFromDate();
+      const db = await readDb(contractorId);
+      const attendance = ensureMonthAttendance(monthKey, db.workers, db.attendance?.[monthKey] || {});
+      const model = calculateMonthModel({ company: db.company, sites: db.sites, workers: db.workers, attendanceByWorker: attendance, monthKey, siteId: "all" });
+
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+
+      // Sheet 1: Wage Sheet
+      const ws1 = wb.addWorksheet("Wage Sheet");
+      ws1.columns = [
+        { header: "Worker Name", key: "name", width: 20 },
+        { header: "Role", key: "role", width: 15 },
+        { header: "Site", key: "site", width: 20 },
+        { header: "Present", key: "present", width: 10 },
+        { header: "Absent", key: "absent", width: 10 },
+        { header: "HD", key: "hd", width: 8 },
+        { header: "OT Days", key: "ot", width: 10 },
+        { header: "Daily Wage", key: "dailyWage", width: 12 },
+        { header: "Basic", key: "basic", width: 14 },
+        { header: "OT Pay", key: "otPay", width: 14 },
+        { header: "Gross", key: "gross", width: 14 },
+        { header: "PF Employee", key: "pfEmp", width: 14 },
+        { header: "ESI Employee", key: "esiEmp", width: 14 },
+        { header: "Net Pay", key: "net", width: 14 },
+        { header: "UAN", key: "uan", width: 18 },
+        { header: "ESI Number", key: "esiNo", width: 18 },
+      ];
+      ws1.getRow(1).font = { bold: true };
+      ws1.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF132537" } };
+
+      for (const row of model.rows) {
+        ws1.addRow({
+          name: row.name, role: row.role, site: row.siteName,
+          present: row.payroll.present, absent: row.payroll.absent,
+          hd: row.payroll.halfDay, ot: row.payroll.overtimeDays,
+          dailyWage: row.dailyWage,
+          basic: row.payroll.basic, otPay: row.payroll.overtimePay,
+          gross: row.payroll.gross, pfEmp: row.payroll.pfEmployee,
+          esiEmp: row.payroll.esiEmployee, net: row.payroll.net,
+          uan: row.uan || "", esiNo: row.esiNumber || "",
+        });
+      }
+      ws1.addRow({
+        name: "TOTAL", role: "", site: "",
+        present: model.totals.present, absent: model.totals.absent, hd: "", ot: "",
+        dailyWage: "", basic: model.totals.basic, otPay: "",
+        gross: model.totals.gross, pfEmp: model.totals.pfEmployee,
+        esiEmp: model.totals.esiEmployee, net: model.totals.net, uan: "", esiNo: "",
+      });
+      ws1.lastRow.font = { bold: true };
+
+      // Sheet 2: PF Summary
+      const ws2 = wb.addWorksheet("PF Summary");
+      ws2.columns = [
+        { header: "Worker Name", key: "name", width: 20 },
+        { header: "UAN", key: "uan", width: 18 },
+        { header: "PF Wages", key: "pfWages", width: 14 },
+        { header: "Employee 12%", key: "empPf", width: 14 },
+        { header: "Employer 12%", key: "emptrPf", width: 14 },
+        { header: "Total PF", key: "total", width: 14 },
+      ];
+      ws2.getRow(1).font = { bold: true };
+      for (const row of model.rows) {
+        const pfWages = Math.min(row.payroll.gross, db.company.pfCap || 15000);
+        ws2.addRow({ name: row.name, uan: row.uan || "", pfWages, empPf: row.payroll.pfEmployee, emptrPf: row.payroll.pfEmployer, total: row.payroll.pfEmployee + row.payroll.pfEmployer });
+      }
+
+      // Sheet 3: ESI Summary
+      const ws3 = wb.addWorksheet("ESI Summary");
+      ws3.columns = [
+        { header: "Worker Name", key: "name", width: 20 },
+        { header: "ESI Number", key: "esiNo", width: 18 },
+        { header: "Gross Wages", key: "gross", width: 14 },
+        { header: "Eligible", key: "eligible", width: 10 },
+        { header: "Employee 0.75%", key: "empEsi", width: 15 },
+        { header: "Employer 3.25%", key: "emptrEsi", width: 15 },
+        { header: "Total ESI", key: "total", width: 14 },
+      ];
+      ws3.getRow(1).font = { bold: true };
+      const esiThreshold = db.company.esiThreshold || 21000;
+      for (const row of model.rows) {
+        const eligible = row.payroll.gross <= esiThreshold;
+        ws3.addRow({ name: row.name, esiNo: row.esiNumber || "", gross: row.payroll.gross, eligible: eligible ? "Yes" : "No", empEsi: row.payroll.esiEmployee, emptrEsi: row.payroll.esiEmployer, total: row.payroll.esiEmployee + row.payroll.esiEmployer });
+      }
+
+      const compName = (db.company.businessName || "Company").replace(/\s+/g, "_");
+      const [yr, mo] = monthKey.split("-");
+      const filename = `Wages_${compName}_${mo}_${yr}.xlsx`;
+
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Access-Control-Allow-Origin": "*",
+      });
+      await wb.xlsx.write(res);
+      res.end();
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // PDF invoice export
+    // -----------------------------------------------------------------------
+
+    if (pathname === "/api/export/invoice" && req.method === "GET") {
+      const monthKey = searchParams.get("month") || monthKeyFromDate();
+      const siteId = searchParams.get("siteId") || "all";
+      const db = await readDb(contractorId);
+      const attendance = ensureMonthAttendance(monthKey, db.workers, db.attendance?.[monthKey] || {});
+      const model = calculateMonthModel({ company: db.company, sites: db.sites, workers: db.workers, attendanceByWorker: attendance, monthKey, siteId });
+
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ margin: 50, size: "A4" });
+
+      const compName = (db.company.businessName || "Company").replace(/\s+/g, "_");
+      const [yr, mo] = monthKey.split("-");
+      const filename = `Invoice_${compName}_${mo}_${yr}.pdf`;
+
+      res.writeHead(200, {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Access-Control-Allow-Origin": "*",
+      });
+      doc.pipe(res);
+
+      // Header
+      doc.fontSize(20).font("Helvetica-Bold").text(db.company.businessName || "Labour Contractor", { align: "center" });
+      doc.fontSize(10).font("Helvetica").text(db.company.address || "", { align: "center" });
+      doc.text(`GSTIN: ${db.company.gstin || "N/A"} | PF: ${db.company.pfRegistration || "N/A"} | ESI: ${db.company.esiRegistration || "N/A"}`, { align: "center" });
+      doc.moveDown();
+      doc.fontSize(14).font("Helvetica-Bold").text("TAX INVOICE", { align: "center" });
+      doc.moveDown(0.5);
+
+      // Invoice details
+      const selectedSite = siteId !== "all" ? db.sites.find((s) => s.id === siteId) : null;
+      const initials = (db.company.businessName || "CO").split(" ").map((w) => w[0]).join("");
+      const invNum = `INV/${initials}/${mo}/${yr}/001`;
+      doc.fontSize(10).font("Helvetica");
+      doc.text(`Invoice No: ${invNum}`);
+      doc.text(`Date: ${new Date().toLocaleDateString("en-IN")}`);
+      doc.text(`Period: ${monthLabel(monthKey)}`);
+      doc.moveDown();
+
+      // Bill To
+      doc.font("Helvetica-Bold").text("Bill To:");
+      doc.font("Helvetica").text(selectedSite?.clientName || "All Clients");
+      doc.text(selectedSite?.location || "");
+      doc.moveDown();
+
+      // Line items
+      doc.font("Helvetica-Bold").text("Line Items:");
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.3);
+      doc.font("Helvetica");
+
+      function lineItem(label, amount) {
+        const amtStr = `Rs. ${amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+        const yPos = doc.y;
+        doc.text(label, 50, yPos, { continued: false, width: 350 });
+        doc.text(amtStr, 400, yPos, { align: "right", width: 145 });
+      }
+
+      lineItem("Gross Wages", model.totals.gross);
+      lineItem(`PF Employer Contribution (${model.rules.pfEmployerRate}%)`, model.totals.pfEmployer);
+      lineItem(`ESI Employer Contribution (${model.rules.esiEmployerRate}%)`, model.totals.esiEmployer);
+      lineItem(`Service Charge (${model.rules.serviceChargeRate}%)`, model.totals.serviceCharge);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.3);
+      lineItem("Sub-total", model.totals.subTotal);
+      lineItem(`CGST (${model.rules.gstRate / 2}%)`, model.totals.gstAmount / 2);
+      lineItem(`SGST (${model.rules.gstRate / 2}%)`, model.totals.gstAmount / 2);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.3);
+      doc.font("Helvetica-Bold");
+      lineItem("GRAND TOTAL", model.totals.invoiceTotal);
+      doc.moveDown();
+
+      doc.font("Helvetica").fontSize(9).fillColor("gray").text("Attached: Muster Roll, PF ECR Copy, ESI Challan, Salary Sheet");
+
+      doc.end();
       return;
     }
 

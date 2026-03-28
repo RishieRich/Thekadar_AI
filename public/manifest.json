@@ -1,0 +1,13 @@
+{
+  "name": "Thekedar AI",
+  "short_name": "Thekedar",
+  "description": "Labour contractor attendance, wages & invoicing",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07111a",
+  "theme_color": "#54d2a0",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

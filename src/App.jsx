@@ -6,6 +6,8 @@ import {
   createWorker,
   deleteSite,
   deleteWorker,
+  downloadInvoice,
+  downloadWages,
   getBootstrap,
   getToken,
   importBatch,
@@ -134,58 +136,74 @@ function MetricCard({ label, value, sub }) {
 // Login page
 // ---------------------------------------------------------------------------
 function LoginPage({ onLogin }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [pins, setPins] = useState(["", "", "", ""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [shake, setShake] = useState(false);
+  const inputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (!username.trim() || !password) return;
+  async function handlePinSubmit(fullPin) {
     setLoading(true);
     setError("");
     try {
-      const data = await login(username.trim(), password);
+      const data = await login(fullPin);
       onLogin(data.token);
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError(err.message || "Galat PIN — dobara try karo");
+      setShake(true);
+      setPins(["", "", "", ""]);
+      inputRefs[0].current?.focus();
+      setTimeout(() => setShake(false), 500);
     } finally {
       setLoading(false);
     }
   }
 
+  function handleDigit(index, value) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const newPins = [...pins];
+    newPins[index] = digit;
+    setPins(newPins);
+    if (digit && index < 3) {
+      inputRefs[index + 1].current?.focus();
+    }
+    if (digit && index === 3) {
+      const fullPin = [...newPins.slice(0, 3), digit].join("");
+      if (fullPin.length === 4) handlePinSubmit(fullPin);
+    }
+  }
+
+  function handleKeyDown(index, e) {
+    if (e.key === "Backspace" && !pins[index] && index > 0) {
+      inputRefs[index - 1].current?.focus();
+    }
+  }
+
   return (
     <div className="login-page">
-      <div className="login-card surface">
-        <div className="brand-badge" style={{ margin: "0 auto 18px" }}>TK</div>
+      <div className={`login-card surface${shake ? " shake" : ""}`}>
+        <div className="brand-badge" style={{ margin: "0 auto 18px" }}>⚡</div>
         <h1 className="login-title">Thekedar AI</h1>
-        <p className="login-sub">Sign in to your contractor account</p>
-        <form className="stack" onSubmit={handleSubmit} style={{ marginTop: 24 }}>
-          <Field label="Username">
+        <p className="login-sub">Apna PIN daalo</p>
+        <div className={`pin-inputs${shake ? " shake" : ""}`}>
+          {pins.map((digit, i) => (
             <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              autoFocus
+              key={i}
+              ref={inputRefs[i]}
+              className={`pin-box${digit ? " filled" : ""}`}
+              type="tel"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleDigit(i, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(i, e)}
+              autoFocus={i === 0}
+              disabled={loading}
             />
-          </Field>
-          <Field label="Password">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </Field>
-          {error && <div className="status-pill error">{error}</div>}
-          <button className="btn login-btn" type="submit" disabled={loading || !username.trim() || !password}>
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-        <p className="login-note">
-          Contact your administrator if you don&apos;t have credentials.
-        </p>
+          ))}
+        </div>
+        {error && <div className="status-pill error" style={{ justifyContent: "center" }}>{error}</div>}
+        {loading && <p className="login-sub">Checking...</p>}
       </div>
     </div>
   );
@@ -197,6 +215,7 @@ function LoginPage({ onLogin }) {
 function App() {
   const [authenticated, setAuthenticated] = useState(() => Boolean(getToken()));
   const [tab, setTab] = useState("dashboard");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [month, setMonth] = useState(monthKeyFromDate());
   const [siteFilter, setSiteFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -413,7 +432,7 @@ function App() {
     } catch (chatError) {
       setChatMessages((current) => [
         ...current,
-        { role: "assistant", content: `Chat error: ${chatError.message}` },
+        { role: "assistant", content: `AI assistant abhi available nahi hai. Internet aur GROQ_API_KEY check karo. (${chatError.message})` },
       ]);
     } finally {
       setChatLoading(false);
@@ -531,7 +550,7 @@ function App() {
                 </div>
               ))}
               {!monthModel.siteSummaries.length && (
-                <div className="empty-state">Add a site to start tracking real operations.</div>
+                <div className="empty-state">Koi site nahi hai. Setup mein site add karo.</div>
               )}
             </div>
           </div>
@@ -920,7 +939,7 @@ function App() {
           </div>
         ) : (
           <div className="empty-state" style={{ marginTop: 16 }}>
-            Add workers first, then attendance can be captured for any month.
+            Koi worker nahi hai. Pehle Setup tab mein workers add karo.
           </div>
         )}
       </div>
@@ -973,9 +992,12 @@ function App() {
           </div>
         ) : (
           <div className="empty-state" style={{ marginTop: 16 }}>
-            No workers available for the selected filter.
+            Is filter ke liye koi worker nahi hai.
           </div>
         )}
+        <div className="button-row" style={{ marginTop: 16 }}>
+          <button className="btn-ghost" type="button" onClick={() => downloadWages(month)}>⬇ Download Excel</button>
+        </div>
       </div>
     );
   }
@@ -1024,6 +1046,13 @@ function App() {
               <p>{selectedSite ? `Filtered to ${selectedSite.name}` : "All sites included"}</p>
             </div>
           </div>
+          <div className="button-row" style={{ marginTop: 16 }}>
+            <button className="btn" type="button" onClick={() => downloadInvoice(month, siteFilter)}>⬇ Download PDF</button>
+            <button className="btn-ghost" type="button" onClick={() => {
+              const msg = encodeURIComponent(`${company.businessName || "Thekedar AI"} ka invoice for ${monthLabel(month)}: Total Rs.${monthModel.totals.invoiceTotal.toLocaleString("en-IN")}`);
+              window.open(`https://wa.me/?text=${msg}`, "_blank");
+            }}>WhatsApp Share</button>
+          </div>
         </div>
       </div>
     );
@@ -1049,22 +1078,29 @@ function App() {
             )}
             <div ref={chatEndRef} />
           </div>
+          {!chatLoading && chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === "assistant" && (
+            <div className="chat-chips">
+              {["Tankhwah dikhao", "PF kitna hai?", "Invoice total batao"].map((chip) => (
+                <button key={chip} className="chat-chip" type="button" onClick={() => setChatInput(chip)}>{chip}</button>
+              ))}
+            </div>
+          )}
           <form className="stack" onSubmit={handleSendChat} style={{ marginTop: 16 }}>
-            <Field label="Ask About Current Operations" full>
+            <Field label="Kuch bhi pucho" full>
               <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Who has the highest net pay this month? Which site has the biggest wage bill?"
+                placeholder="Aaj kitne log aaye? Ramesh ki tankhwah kitni hai?"
               />
             </Field>
             <div className="button-row">
-              <button className="btn" type="submit" disabled={chatLoading}>Send to Grok</button>
+              <button className="btn" type="submit" disabled={chatLoading}>Bhejo</button>
             </div>
           </form>
         </div>
 
         <div className="surface panel">
-          <h3 className="section-title">Context Sent To Chat</h3>
+          <h3 className="section-title">Chat Context</h3>
           <div className="stack">
             <div className="mini-card">
               <h4>Scope</h4>
@@ -1073,16 +1109,16 @@ function App() {
               <p>Workers in context: {monthModel.rows.length}</p>
             </div>
             <div className="mini-card">
-              <h4>What Grok Receives</h4>
+              <h4>AI ko milta hai</h4>
               <p>Company profile</p>
-              <p>Sites and workers</p>
-              <p>Attendance summary and payroll totals</p>
-              <p>Invoice totals and current rules</p>
+              <p>Sites aur workers</p>
+              <p>Attendance summary aur payroll totals</p>
+              <p>Invoice totals aur current rules</p>
             </div>
             <div className="mini-card">
               <h4>Required Env</h4>
-              <p className="mono">XAI_API_KEY</p>
-              <p className="mono">XAI_MODEL (optional)</p>
+              <p className="mono">GROQ_API_KEY</p>
+              <p className="mono">GROQ_MODEL (optional)</p>
             </div>
           </div>
         </div>
@@ -1138,12 +1174,13 @@ function App() {
         <div className="page-header">
           <div>
             <h2>{tab === "dashboard" ? "Live Operations" : NAV_ITEMS.find((item) => item.id === tab)?.label}</h2>
-            <p>{company.businessName || "Configure your business in Setup"} - {monthLabel(month)}</p>
+            <p>{company.businessName || "Configure your business in Setup"}</p>
           </div>
           <div className="toolbar">
-            <div className="field" style={{ minWidth: 170 }}>
-              <label>Month</label>
-              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+            <div className="month-nav">
+              <button type="button" className="btn-ghost month-arrow" onClick={() => { const d = new Date(month + "-01"); d.setMonth(d.getMonth() - 1); setMonth(d.toISOString().slice(0, 7)); }}>←</button>
+              <span className="month-label">{monthLabel(month)}</span>
+              <button type="button" className="btn-ghost month-arrow" onClick={() => { const d = new Date(month + "-01"); d.setMonth(d.getMonth() + 1); setMonth(d.toISOString().slice(0, 7)); }}>→</button>
             </div>
             <div className="pill-row">
               <button
@@ -1171,11 +1208,42 @@ function App() {
         {error && <div className="status-pill error">{error}</div>}
         {!error && notice && <div className="status-pill">{notice}</div>}
         {loading ? (
-          <div className="surface panel" style={{ marginTop: 16 }}>Loading contractor data...</div>
+          <div className="loading-center">
+            <div className="loading-spinner" />
+            <p>Loading...</p>
+          </div>
         ) : (
           <div style={{ marginTop: 16 }}>{renderActiveTab()}</div>
         )}
       </main>
+
+      {/* Mobile bottom nav */}
+      <nav className="bottom-nav">
+        {[
+          { id: "dashboard", label: "Dashboard", icon: "📊" },
+          { id: "chat", label: "Chat", icon: "💬" },
+          { id: "attendance", label: "Haziri", icon: "📋" },
+          { id: "payroll", label: "Tankhwah", icon: "💰" },
+        ].map((item) => (
+          <button key={item.id} className={`bottom-tab${tab === item.id ? " active" : ""}`} onClick={() => { setTab(item.id); setMoreOpen(false); }} type="button">
+            <span className="tab-icon">{item.icon}</span>
+            <span className="tab-label">{item.label}</span>
+          </button>
+        ))}
+        <button className={`bottom-tab${moreOpen ? " active" : ""}`} onClick={() => setMoreOpen((o) => !o)} type="button">
+          <span className="tab-icon">⋯</span>
+          <span className="tab-label">More</span>
+        </button>
+      </nav>
+      {moreOpen && (
+        <div className="more-sheet" onClick={() => setMoreOpen(false)}>
+          <div className="more-sheet-content" onClick={(e) => e.stopPropagation()}>
+            <button className="more-item" onClick={() => { setTab("invoice"); setMoreOpen(false); }} type="button">🧾 Invoice</button>
+            <button className="more-item" onClick={() => { setTab("setup"); setMoreOpen(false); }} type="button">⚙️ Setup</button>
+            <button className="more-item danger" onClick={() => { handleLogout(); setMoreOpen(false); }} type="button">🚪 Sign Out</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

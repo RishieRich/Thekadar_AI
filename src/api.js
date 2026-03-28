@@ -2,15 +2,15 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 const TOKEN_KEY = "thekedar_token";
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || "";
+  return sessionStorage.getItem(TOKEN_KEY) || "";
 }
 
 export function setToken(token) {
-  localStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 async function request(path, options = {}) {
@@ -39,11 +39,11 @@ async function request(path, options = {}) {
   return data;
 }
 
-export async function login(username, password) {
+export async function login(pin) {
   const response = await fetch(`${API_BASE}/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ pin }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -123,4 +123,34 @@ export function importBatch(data) {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export function downloadWages(month) {
+  const token = getToken();
+  const url = `${API_BASE}/export/wages?month=${encodeURIComponent(month)}`;
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((r) => r.blob())
+    .then((blob) => {
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `Wages_${month}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    });
+}
+
+export function downloadInvoice(month, siteId) {
+  const token = getToken();
+  const url = `${API_BASE}/export/invoice?month=${encodeURIComponent(month)}&siteId=${encodeURIComponent(siteId || "all")}`;
+  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    .then((r) => r.blob())
+    .then((blob) => {
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `Invoice_${month}.pdf`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    });
 }

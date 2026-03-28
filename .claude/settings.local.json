@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(node -e \"import\\(''./server/auth.mjs''\\).then\\(m => console.log\\(''auth exports:'', Object.keys\\(m\\)\\)\\)\")",
+      "Bash(node -e \"import\\(''./server/router.mjs''\\).then\\(m => console.log\\(''router exports:'', Object.keys\\(m\\)\\)\\)\")",
+      "Bash(npm run:*)",
+      "Bash(node -e \":*)"
     ]
   }
 }

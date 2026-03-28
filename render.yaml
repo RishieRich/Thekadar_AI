@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: thekedar-ai
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server.mjs
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8787"
+      - key: C1_USERNAME
+        sync: false
+      - key: C1_PASSWORD
+        sync: false
+      - key: C1_PIN
+        value: "1234"
+      - key: C1_ID
+        value: "contractor1"
+      - key: C2_USERNAME
+        sync: false
+      - key: C2_PASSWORD
+        sync: false
+      - key: C2_PIN
+        value: "5678"
+      - key: C2_ID
+        value: "contractor2"
