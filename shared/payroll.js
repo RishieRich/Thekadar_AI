@@ -52,7 +52,7 @@ export function createDefaultAttendanceMap(monthKey, current = {}) {
   const totalDays = new Date(year, month, 0).getDate();
   const next = {};
 
-  for (let day = 1; day <= totalDays; day += 1) {
+  for (let day = 1; day <= trackedDays; day += 1) {
     const dayKey = String(day);
     const existingStatus = current[dayKey] ?? current[day];
     const isSunday = new Date(year, month - 1, day).getDay() === 0;
@@ -97,6 +97,8 @@ export function buildRules(company = {}) {
 
 export function calculatePayroll(worker, attendance = {}, monthKey, company = {}) {
   const totalDays = daysInMonth(monthKey);
+  const today = new Date();
+  const trackedDays = monthKey === monthKeyFromDate(today) ? today.getDate() : totalDays;
   const rules = buildRules(company);
   const wagePerDay = normalizeNumber(worker.dailyWage ?? worker.wage, 0);
 
@@ -106,7 +108,7 @@ export function calculatePayroll(worker, attendance = {}, monthKey, company = {}
   let overtimeDays = 0;
   let weeklyOff = 0;
 
-  for (let day = 1; day <= totalDays; day += 1) {
+  for (let day = 1; day <= trackedDays; day += 1) {
     const status = attendance[String(day)] ?? attendance[day] ?? "A";
 
     if (status === "P") present += 1;
@@ -131,7 +133,7 @@ export function calculatePayroll(worker, attendance = {}, monthKey, company = {}
   const esiEmployee = esiEligible ? round(gross * (rules.esiEmployeeRate / 100)) : 0;
   const esiEmployer = esiEligible ? round(gross * (rules.esiEmployerRate / 100)) : 0;
   const net = gross - pfEmployee - esiEmployee;
-  const attendanceBase = Math.max(totalDays - weeklyOff, 1);
+  const attendanceBase = Math.max(trackedDays - weeklyOff, 1);
   const attendancePercent = round((present / attendanceBase) * 100);
 
   return {
@@ -236,3 +238,6 @@ export function formatCurrency(amount, locale = "en-IN", currency = "INR") {
     maximumFractionDigits: 0,
   }).format(Number(amount) || 0);
 }
+
+
+

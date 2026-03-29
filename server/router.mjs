@@ -297,11 +297,37 @@ export async function handleRequest(req, res) {
       const body = await readJsonBody(req);
       const monthKey = sanitizeText(body.month) || monthKeyFromDate();
       const workerId = sanitizeText(body.workerId);
-      const day = String(Number(body.day));
+      const dayNumber = Number(body.day);
+      const day = String(dayNumber);
       const status = sanitizeText(body.status).toUpperCase();
+      const allowPastEdit = body.overridePastEdit === true;
+      const today = new Date();
+      const currentMonthKey = monthKeyFromDate(today);
+      const todayDay = today.getDate();
 
-      if (!workerId || !ATTENDANCE_STATUSES.includes(status) || !day || day === "NaN") {
+      if (
+        !workerId ||
+        !ATTENDANCE_STATUSES.includes(status) ||
+        !Number.isInteger(dayNumber) ||
+        dayNumber < 1 ||
+        dayNumber > daysInMonth(monthKey)
+      ) {
         json(res, 400, { error: "Valid month, workerId, day, and status are required." });
+        return;
+      }
+
+      if (monthKey !== currentMonthKey) {
+        json(res, 403, { error: "Only the current month can be edited from the daily app view." });
+        return;
+      }
+
+      if (dayNumber > todayDay) {
+        json(res, 403, { error: "Future dates cannot be updated yet." });
+        return;
+      }
+
+      if (dayNumber < todayDay && !allowPastEdit) {
+        json(res, 403, { error: "Past dates are locked. Enable correction mode to edit older attendance." });
         return;
       }
 
@@ -593,3 +619,4 @@ export async function handleRequest(req, res) {
     json(res, statusCode, { error: message });
   }
 }
+
