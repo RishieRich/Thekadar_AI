@@ -52,7 +52,7 @@ export function createDefaultAttendanceMap(monthKey, current = {}) {
   const totalDays = new Date(year, month, 0).getDate();
   const next = {};
 
-  for (let day = 1; day <= trackedDays; day += 1) {
+  for (let day = 1; day <= totalDays; day += 1) {
     const dayKey = String(day);
     const existingStatus = current[dayKey] ?? current[day];
     const isSunday = new Date(year, month - 1, day).getDay() === 0;

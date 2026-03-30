@@ -6,7 +6,11 @@
       "Bash(node -e \"import\\(''./server/auth.mjs''\\).then\\(m => console.log\\(''auth exports:'', Object.keys\\(m\\)\\)\\)\")",
       "Bash(node -e \"import\\(''./server/router.mjs''\\).then\\(m => console.log\\(''router exports:'', Object.keys\\(m\\)\\)\\)\")",
       "Bash(npm run:*)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const fs = require\\(''fs''\\); const css = fs.readFileSync\\(''dist/assets/index-Dzzr-wkz.css'',''utf8''\\); console.log\\(css.substring\\(0,500\\)\\);\")",
+      "Bash(ls:*)",
+      "Bash(timeout 5 node server.mjs)",
+      "Bash(node:*)"
     ]
   }
 }

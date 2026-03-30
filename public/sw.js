@@ -1,4 +1,4 @@
-const CACHE_NAME = "thekedar-v1";
+const CACHE_NAME = "thekedar-v3";
 const STATIC_ASSETS = ["/", "/index.html"];
 
 self.addEventListener("install", (event) => {
