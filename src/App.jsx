@@ -29,19 +29,19 @@ import {
 } from "../shared/payroll.js";
 
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: "01" },
-  { id: "setup", label: "Setup", icon: "02" },
-  { id: "attendance", label: "Attendance", icon: "03" },
-  { id: "payroll", label: "Payroll", icon: "04" },
-  { id: "invoice", label: "Invoice", icon: "05" },
-  { id: "chat", label: "AI Chat", icon: "06" },
+  { id: "dashboard", label: "Dashboard", icon: "⊞" },
+  { id: "setup", label: "Setup", icon: "⚙" },
+  { id: "attendance", label: "Attendance", icon: "✔" },
+  { id: "payroll", label: "Payroll", icon: "₹" },
+  { id: "invoice", label: "Invoice", icon: "≡" },
+  { id: "chat", label: "AI Chat", icon: "✉" },
 ];
 
 const MOBILE_NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: "DB" },
-  { id: "attendance", label: "Haziri", icon: "AT" },
-  { id: "payroll", label: "Payroll", icon: "PY" },
-  { id: "chat", label: "Chat", icon: "AI" },
+  { id: "dashboard", label: "Home", icon: "⊞" },
+  { id: "attendance", label: "Haziri", icon: "✔" },
+  { id: "payroll", label: "Tankhwah", icon: "₹" },
+  { id: "chat", label: "Chat", icon: "✉" },
 ];
 
 const ATTENDANCE_CYCLE = ["P", "A", "HD", "OT", "WO"];
@@ -55,19 +55,34 @@ const STATUS_LABELS = {
   "--": "Future date",
 };
 
+const STATUS_HINDI = {
+  P: "Haazir",
+  A: "Chutti",
+  HD: "Aadha din",
+  OT: "Overtime",
+  WO: "Weekly off",
+};
+
 const TAB_HELP = {
   dashboard:
-    "This is the month-to-date view. Keep it open for a quick read on active workers, wages, invoice value, and site performance.",
+    "Month-to-date view. Present today, wages, invoice values — all live. Mark attendance first from the Haziri tab.",
   setup:
-    "Use this area for business settings, sites, and workers. The quick add box is the fastest way to load a large crew.",
+    "Add your business details, sites, and workers here. Quick add is the fastest way to load your full crew.",
   attendance:
-    "Daily use should happen from the Today board. The full month register is visible, but past dates stay locked until correction mode is enabled.",
+    "Daily use: mark today's crew from the Today Board. Month Register shows the full calendar.",
   payroll:
-    "Payroll shows month-to-date wages for the current month only. Future dates are excluded until that day arrives.",
+    "Month-to-date wages only. Future dates are excluded until that day arrives.",
   invoice:
-    "Invoice numbers are live estimates for the current month. They update as attendance, workers, and rates change.",
+    "Live invoice estimate for the current month. Updates as attendance and workers change.",
   chat:
-    "The AI assistant sees the current month, selected site filter, workers, attendance summaries, payroll numbers, and invoice totals.",
+    "AI assistant sees current month, site filter, workers, attendance, payroll, and invoice. Ask in Hindi or English.",
+};
+
+const CHAT_SUGGESTIONS = {
+  attendance: ["Aaj kitne log aaye?", "Kaun absent hai aaj?", "Sabki haziri dikhao"],
+  payroll: ["Sabse zyada tankhwah kisko?", "PF total kitna hai?", "Net payable batao"],
+  invoice: ["Invoice total kya hai?", "GST kitna laga?", "Service charge batao"],
+  default: ["Aaj kitne log aaye?", "Is mahine ka PF total batao", "Invoice total kya hai?", "Absent workers ki list do", "ESI eligible kaun hain?", "Net payable kitna banega?"],
 };
 
 const DEMO_SITE_BLUEPRINTS = [
@@ -77,45 +92,14 @@ const DEMO_SITE_BLUEPRINTS = [
 ];
 
 const DEMO_FIRST_NAMES = [
-  "Aakash",
-  "Amit",
-  "Anil",
-  "Arjun",
-  "Bhavesh",
-  "Chandan",
-  "Deepak",
-  "Dilip",
-  "Ganesh",
-  "Imran",
-  "Jitendra",
-  "Karan",
-  "Mahesh",
-  "Mukesh",
-  "Nilesh",
-  "Pankaj",
-  "Prakash",
-  "Rahul",
-  "Rajesh",
-  "Rakesh",
-  "Rohit",
-  "Sanjay",
-  "Shivam",
-  "Suresh",
+  "Aakash","Amit","Anil","Arjun","Bhavesh","Chandan","Deepak","Dilip",
+  "Ganesh","Imran","Jitendra","Karan","Mahesh","Mukesh","Nilesh","Pankaj",
+  "Prakash","Rahul","Rajesh","Rakesh","Rohit","Sanjay","Shivam","Suresh",
 ];
 
 const DEMO_LAST_NAMES = [
-  "Chaudhary",
-  "Gaikwad",
-  "Jadhav",
-  "Kamble",
-  "Khan",
-  "Kumar",
-  "Mishra",
-  "Patel",
-  "Pawar",
-  "Rathod",
-  "Sharma",
-  "Singh",
+  "Chaudhary","Gaikwad","Jadhav","Kamble","Khan","Kumar",
+  "Mishra","Patel","Pawar","Rathod","Sharma","Singh",
 ];
 
 const DEMO_ROLE_BLUEPRINTS = [
@@ -126,6 +110,8 @@ const DEMO_ROLE_BLUEPRINTS = [
   { role: "Scaffolder", wage: 620 },
   { role: "Mason", wage: 680 },
 ];
+
+/* ── Utility helpers ─────────────────────────────── */
 
 function emptySiteForm() {
   return { name: "", clientName: "", location: "" };
@@ -170,36 +156,24 @@ function parseCSV(text) {
     const values = [];
     let current = "";
     let inQuotes = false;
-
-    for (let index = 0; index < line.length; index += 1) {
-      const char = line[index];
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
       if (char === '"') {
-        if (inQuotes && line[index + 1] === '"') {
-          current += '"';
-          index += 1;
-        } else {
-          inQuotes = !inQuotes;
-        }
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else { inQuotes = !inQuotes; }
       } else if (char === "," && !inQuotes) {
-        values.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
+        values.push(current.trim()); current = "";
+      } else { current += char; }
     }
-
     values.push(current.trim());
     return values;
   }
 
-  const headers = parseLine(lines[0]).map((header) => header.replace(/^"|"$/g, ""));
-  return lines
-    .slice(1)
-    .filter((line) => line.trim())
-    .map((line) => {
-      const values = parseLine(line);
-      return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
-    });
+  const headers = parseLine(lines[0]).map((h) => h.replace(/^"|"$/g, ""));
+  return lines.slice(1).filter((l) => l.trim()).map((line) => {
+    const values = parseLine(line);
+    return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
+  });
 }
 
 function matchesSearch(values, query) {
@@ -210,91 +184,75 @@ function matchesSearch(values, query) {
 
 function parseBulkWorkerNames(text) {
   const seen = new Set();
-  return String(text || "")
-    .split(/\r?\n|,/)
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .filter((name) => {
-      const key = name.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  return String(text || "").split(/\r?\n|,/).map((n) => n.trim()).filter(Boolean).filter((n) => {
+    const key = n.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function nextAttendanceStatus(currentStatus) {
-  const currentIndex = ATTENDANCE_CYCLE.indexOf(currentStatus);
-  const safeIndex = currentIndex === -1 ? 0 : currentIndex;
-  return ATTENDANCE_CYCLE[(safeIndex + 1) % ATTENDANCE_CYCLE.length];
+  const idx = ATTENDANCE_CYCLE.indexOf(currentStatus);
+  const safe = idx === -1 ? 0 : idx;
+  return ATTENDANCE_CYCLE[(safe + 1) % ATTENDANCE_CYCLE.length];
 }
 
 function isTypingTarget(target) {
   if (!target) return false;
-  const tagName = target.tagName;
-  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT" || target.isContentEditable;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
 function handleScrollableKeyDown(event) {
   if (isTypingTarget(event.target)) return;
-  const element = event.currentTarget;
-  if (!element || typeof element.scrollBy !== "function") return;
-
-  const horizontalStep = 96;
-  const verticalStep = 72;
-
-  if (event.key === "ArrowDown") {
-    element.scrollBy({ top: verticalStep, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "ArrowUp") {
-    element.scrollBy({ top: -verticalStep, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "PageDown") {
-    element.scrollBy({ top: element.clientHeight * 0.9, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "PageUp") {
-    element.scrollBy({ top: -element.clientHeight * 0.9, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "Home") {
-    element.scrollTo({ top: 0, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "End") {
-    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "ArrowRight") {
-    element.scrollBy({ left: horizontalStep, behavior: "smooth" });
-    event.preventDefault();
-  } else if (event.key === "ArrowLeft") {
-    element.scrollBy({ left: -horizontalStep, behavior: "smooth" });
-    event.preventDefault();
-  }
+  const el = event.currentTarget;
+  if (!el || typeof el.scrollBy !== "function") return;
+  const hStep = 96;
+  const vStep = 72;
+  if (event.key === "ArrowDown") { el.scrollBy({ top: vStep, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "ArrowUp") { el.scrollBy({ top: -vStep, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "PageDown") { el.scrollBy({ top: el.clientHeight * 0.9, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "PageUp") { el.scrollBy({ top: -el.clientHeight * 0.9, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "Home") { el.scrollTo({ top: 0, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "End") { el.scrollTo({ top: el.scrollHeight, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "ArrowRight") { el.scrollBy({ left: hStep, behavior: "smooth" }); event.preventDefault(); }
+  else if (event.key === "ArrowLeft") { el.scrollBy({ left: -hStep, behavior: "smooth" }); event.preventDefault(); }
 }
 
 function buildDemoImportPayload(existingSites, existingWorkersCount) {
-  const existingNames = new Set(existingSites.map((site) => site.name.toLowerCase()));
-  const extraSites = DEMO_SITE_BLUEPRINTS.filter((site) => !existingNames.has(site.name.toLowerCase()));
-  const sitePool = [...existingSites.map((site) => site.name), ...extraSites.map((site) => site.name)];
+  const existing = new Set(existingSites.map((s) => s.name.toLowerCase()));
+  const extra = DEMO_SITE_BLUEPRINTS.filter((s) => !existing.has(s.name.toLowerCase()));
+  const pool = [...existingSites.map((s) => s.name), ...extra.map((s) => s.name)];
   const workers = [];
-  let sequence = existingWorkersCount + 1;
-
-  for (const firstName of DEMO_FIRST_NAMES) {
-    for (const lastName of DEMO_LAST_NAMES) {
+  let seq = existingWorkersCount + 1;
+  for (const fn of DEMO_FIRST_NAMES) {
+    for (const ln of DEMO_LAST_NAMES) {
       if (workers.length >= 72) break;
-      const roleBlueprint = DEMO_ROLE_BLUEPRINTS[workers.length % DEMO_ROLE_BLUEPRINTS.length];
-      workers.push({
-        name: `${firstName} ${lastName}`,
-        role: roleBlueprint.role,
-        dailyWage: roleBlueprint.wage,
-        uan: `100${String(sequence).padStart(9, "0")}`,
-        esiNumber: `310${String(sequence).padStart(7, "0")}`,
-        siteName: sitePool[workers.length % sitePool.length] || "",
-        active: true,
-      });
-      sequence += 1;
+      const rb = DEMO_ROLE_BLUEPRINTS[workers.length % DEMO_ROLE_BLUEPRINTS.length];
+      workers.push({ name: `${fn} ${ln}`, role: rb.role, dailyWage: rb.wage,
+        uan: `100${String(seq).padStart(9, "0")}`, esiNumber: `310${String(seq).padStart(7, "0")}`,
+        siteName: pool[workers.length % pool.length] || "", active: true });
+      seq++;
     }
   }
-
-  return { sites: extraSites, workers };
+  return { sites: extra, workers };
 }
+
+function formatTimeAgo(date) {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (sec < 60) return "just now";
+  const min = Math.floor(sec / 60);
+  if (min === 1) return "1 minute ago";
+  if (min < 60) return `${min} minutes ago`;
+  return "a while ago";
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
+/* ── Reusable Components ─────────────────────────── */
 
 function Field({ label, children, full = false, hint = "" }) {
   return (
@@ -308,9 +266,9 @@ function Field({ label, children, full = false, hint = "" }) {
   );
 }
 
-function MetricCard({ label, value, sub }) {
+function MetricCard({ label, value, sub, colorClass = "" }) {
   return (
-    <div className="surface metric-card">
+    <div className={`surface metric-card ${colorClass}`}>
       <p className="metric-label">{label}</p>
       <p className="metric-value">{value}</p>
       <p className="metric-sub">{sub}</p>
@@ -321,9 +279,7 @@ function MetricCard({ label, value, sub }) {
 function HelpHint({ text }) {
   return (
     <span className="help-wrap">
-      <button className="help-button" type="button" aria-label="Help">
-        i
-      </button>
+      <button className="help-button" type="button" aria-label="Help">?</button>
       <span className="help-popover">{text}</span>
     </span>
   );
@@ -345,6 +301,31 @@ function SectionHeader({ title, sub, help, actions, eyebrow }) {
   );
 }
 
+function CollapsibleSection({ title, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="collapsible-section">
+      <button type="button" className="collapsible-header" onClick={() => setOpen((o) => !o)}>
+        <span>{title}</span>
+        <span className={`collapsible-chevron${open ? " open" : ""}`}>▼</span>
+      </button>
+      {open && <div className="collapsible-body">{children}</div>}
+    </div>
+  );
+}
+
+function ToastContainer({ toasts }) {
+  return (
+    <div className="toast-container" aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Login Page ─────────────────────────────────── */
+
 function LoginPage({ onLogin }) {
   const [pins, setPins] = useState(["", "", "", ""]);
   const [error, setError] = useState("");
@@ -359,10 +340,11 @@ function LoginPage({ onLogin }) {
       const data = await login(fullPin);
       onLogin(data.token);
     } catch (loginError) {
-      setError(loginError.message || "Galat PIN. Dobara try karo.");
+      setError(loginError.message || "Galat PIN. Wrong PIN -- dobara try karo.");
       setShake(true);
       setPins(["", "", "", ""]);
       inputRefs[0].current?.focus();
+      if (navigator.vibrate) navigator.vibrate(200);
       setTimeout(() => setShake(false), 450);
     } finally {
       setLoading(false);
@@ -371,14 +353,13 @@ function LoginPage({ onLogin }) {
 
   function handleDigit(index, value) {
     const digit = value.replace(/\D/g, "").slice(-1);
-    const nextPins = [...pins];
-    nextPins[index] = digit;
-    setPins(nextPins);
-
+    const next = [...pins];
+    next[index] = digit;
+    setPins(next);
     if (digit && index < 3) inputRefs[index + 1].current?.focus();
     if (digit && index === 3) {
-      const fullPin = [...nextPins.slice(0, 3), digit].join("");
-      if (fullPin.length === 4) handlePinSubmit(fullPin);
+      const full = [...next.slice(0, 3), digit].join("");
+      if (full.length === 4) handlePinSubmit(full);
     }
   }
 
@@ -394,14 +375,11 @@ function LoginPage({ onLogin }) {
         <div className="login-copy">
           <p className="eyebrow">Simple contractor login</p>
           <h1>Thekedar AI</h1>
-          <p>
-            Daily attendance, payroll, invoice totals, and worker setup are kept simple for
-            contractor use on laptop and mobile.
-          </p>
+          <p>Daily attendance, payroll, invoice totals, and worker setup — kept simple for contractor use on laptop and mobile.</p>
           <div className="login-points surface">
             <div className="login-point">
               <strong>Daily use</strong>
-              <span>Open Attendance and mark today&apos;s crew first.</span>
+              <span>Open Haziri and mark today&apos;s crew first.</span>
             </div>
             <div className="login-point">
               <strong>Past change safety</strong>
@@ -416,23 +394,25 @@ function LoginPage({ onLogin }) {
 
         <div className={`login-card surface${shake ? " shake" : ""}`}>
           <div className="brand-badge login-badge">TK</div>
-          <h2 className="login-title">Enter your 4 digit PIN</h2>
+          <h2 className="login-title">Enter your 4-digit PIN</h2>
           <p className="login-sub">Ask the admin for your contractor PIN and type it below.</p>
+          <p className="login-sub-hindi">Apna 4-digit PIN dalein</p>
 
           <div className={`pin-inputs${shake ? " shake" : ""}`}>
             {pins.map((digit, index) => (
               <input
                 key={index}
                 ref={inputRefs[index]}
-                className={`pin-box${digit ? " filled" : ""}`}
+                className={`pin-box${digit ? " filled" : ""}${shake ? " error-flash" : ""}`}
                 type="tel"
                 inputMode="numeric"
                 maxLength={1}
                 value={digit}
-                onChange={(event) => handleDigit(index, event.target.value)}
-                onKeyDown={(event) => handleKeyDown(index, event)}
+                onChange={(e) => handleDigit(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
                 autoFocus={index === 0}
                 disabled={loading}
+                enterKeyHint={index === 3 ? "done" : "next"}
               />
             ))}
           </div>
@@ -444,11 +424,14 @@ function LoginPage({ onLogin }) {
           )}
 
           {loading ? <p className="login-sub">Checking PIN...</p> : null}
+          <p className="login-forgot">PIN yaad nahi? Apne admin se contact karein.</p>
         </div>
       </div>
     </div>
   );
 }
+
+/* ── Main App ─────────────────────────────────────── */
 
 function App() {
   const currentDate = new Date();
@@ -460,6 +443,7 @@ function App() {
   const pageRef = useRef(null);
   const chatEndRef = useRef(null);
 
+  // Core state
   const [authenticated, setAuthenticated] = useState(() => Boolean(getToken()));
   const [tab, setTab] = useState("dashboard");
   const [moreOpen, setMoreOpen] = useState(false);
@@ -472,29 +456,62 @@ function App() {
   const [sites, setSites] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [attendance, setAttendance] = useState({});
+  const [lastSynced, setLastSynced] = useState(null);
+
+  // Forms
   const [companyForm, setCompanyForm] = useState(companyFormFromCompany({}));
   const [siteForm, setSiteForm] = useState(emptySiteForm());
   const [workerForm, setWorkerForm] = useState(emptyWorkerForm());
   const [bulkWorkerForm, setBulkWorkerForm] = useState(emptyBulkWorkerForm());
   const [editingSiteId, setEditingSiteId] = useState("");
   const [editingWorkerId, setEditingWorkerId] = useState("");
+
+  // Search
   const [workerSearch, setWorkerSearch] = useState("");
   const [attendanceSearch, setAttendanceSearch] = useState("");
+  const [payrollSearch, setPayrollSearch] = useState("");
+
+  // Inline confirmations
+  const [deletingSiteId, setDeletingSiteId] = useState("");
+  const [deletingWorkerId, setDeletingWorkerId] = useState("");
+  const [logoutConfirming, setLogoutConfirming] = useState(false);
+  const [loadDemoConfirming, setLoadDemoConfirming] = useState(false);
+
+  // Attendance UI
+  const [attendanceView, setAttendanceView] = useState("today");
   const [correctionMode, setCorrectionMode] = useState(false);
+  const [markAllConfirming, setMarkAllConfirming] = useState(false);
+  const [savingCells, setSavingCells] = useState(new Set());
+  const [savedCells, setSavedCells] = useState(new Set());
+
+  // Chat
   const [chatMessages, setChatMessages] = useState([
     {
       role: "assistant",
-      content:
-        "Thekedar AI is ready. Ask about today attendance, payroll, invoice totals, or worker issues for the current month.",
+      content: "Thekedar AI ready hai! Haziri, payroll, invoice, ya workers ke baare mein kuch bhi pucho — Hindi ya English mein.",
+      timestamp: new Date(),
     },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+
+  // Import
   const [importSitesText, setImportSitesText] = useState("");
   const [importWorkersText, setImportWorkersText] = useState("");
   const [importPreview, setImportPreview] = useState(null);
   const [importBusy, setImportBusy] = useState(false);
 
+  // Toast
+  const [toasts, setToasts] = useState([]);
+
+  /* ── Toast system ─────────────────────────────── */
+  function showToast(message, type = "success") {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
+  }
+
+  /* ── Data loading ─────────────────────────────── */
   async function loadBootstrap(targetMonth = month) {
     setLoading(true);
     setError("");
@@ -505,11 +522,13 @@ function App() {
       setWorkers(data.workers);
       setAttendance(data.attendance);
       setCompanyForm(companyFormFromCompany(data.company));
-      if (siteFilter !== "all" && !data.sites.some((site) => site.id === siteFilter)) {
+      setLastSynced(new Date());
+      if (siteFilter !== "all" && !data.sites.some((s) => s.id === siteFilter)) {
         setSiteFilter("all");
       }
     } catch (loadError) {
       setError(loadError.message);
+      showToast(loadError.message, "error");
     } finally {
       setLoading(false);
     }
@@ -523,47 +542,59 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, chatLoading]);
 
-  const selectedSite = siteFilter === "all" ? null : sites.find((site) => site.id === siteFilter);
-  const siteMap = new Map(sites.map((site) => [site.id, site]));
+  /* ── Derived data ─────────────────────────────── */
+  const selectedSite = siteFilter === "all" ? null : sites.find((s) => s.id === siteFilter);
+  const siteMap = new Map(sites.map((s) => [s.id, s]));
   const monthModel = calculateMonthModel({
-    company,
-    sites,
-    workers,
-    attendanceByWorker: attendance,
-    monthKey: month,
-    siteId: siteFilter,
+    company, sites, workers, attendanceByWorker: attendance, monthKey: month, siteId: siteFilter,
   });
   const dashboardSiteSummaries =
-    siteFilter === "all"
-      ? monthModel.siteSummaries
-      : monthModel.siteSummaries.filter((site) => site.id === siteFilter);
+    siteFilter === "all" ? monthModel.siteSummaries : monthModel.siteSummaries.filter((s) => s.id === siteFilter);
   const allDays = Object.keys(createDefaultAttendanceMap(month, {}));
   const attendanceRows = monthModel.rows.filter((row) =>
     matchesSearch([row.name, row.role, row.siteName], attendanceSearch),
   );
-  const visibleWorkers = workers.filter((worker) => {
-    const siteName = siteMap.get(worker.siteId)?.name || "Unassigned";
+  const visibleWorkers = workers.filter((w) => {
+    const siteName = siteMap.get(w.siteId)?.name || "Unassigned";
     return (
-      (siteFilter === "all" || worker.siteId === siteFilter) &&
-      matchesSearch([worker.name, worker.role, siteName], workerSearch)
+      (siteFilter === "all" || w.siteId === siteFilter) &&
+      matchesSearch([w.name, w.role, siteName], workerSearch)
     );
   });
+  const payrollRows = monthModel.rows.filter((row) =>
+    matchesSearch([row.name, row.role, row.siteName], payrollSearch),
+  );
   const todaySummary = attendanceRows.reduce(
-    (accumulator, row) => {
-      const status = row.attendance[todayDayKey] || "A";
-      accumulator[status] = (accumulator[status] || 0) + 1;
-      return accumulator;
-    },
+    (acc, row) => { const s = row.attendance[todayDayKey] || "A"; acc[s] = (acc[s] || 0) + 1; return acc; },
     { P: 0, A: 0, HD: 0, OT: 0, WO: 0 },
   );
-  const activeWorkers = workers.filter((worker) => worker.active).length;
+  const activeWorkers = workers.filter((w) => w.active).length;
 
-  function clearMessages() {
-    setError("");
-    setNotice("");
+  /* ── Site groups for Today Board ─────────────── */
+  const siteGroups = [];
+  const seenSites = new Set();
+  for (const row of attendanceRows) {
+    const key = row.siteId || "unassigned";
+    if (!seenSites.has(key)) {
+      seenSites.add(key);
+      siteGroups.push({ siteKey: key, siteName: row.siteName || "Unassigned", rows: [] });
+    }
+    const g = siteGroups.find((g) => g.siteKey === key);
+    if (g) g.rows.push(row);
   }
 
+  /* ── Invoice helpers ──────────────────────────── */
+  const invoiceNumber = `INV-${month.replace("-", "")}-${(company.businessName || "TK").substring(0, 3).toUpperCase().replace(/[^A-Z]/g, "X")}`;
+  const missingRegs = [];
+  if (!company.gstin) missingRegs.push("GSTIN");
+  if (!company.pfRegistration) missingRegs.push("PF Registration");
+  if (!company.esiRegistration) missingRegs.push("ESI Registration");
+
+  /* ── Helpers ──────────────────────────────────── */
+  function clearMessages() { setError(""); setNotice(""); }
+
   function announce(message) {
+    showToast(message, "success");
     setNotice(message);
     setError("");
   }
@@ -575,60 +606,44 @@ function App() {
       await work();
     } catch (actionError) {
       setError(actionError.message);
+      showToast(actionError.message, "error");
     } finally {
       setBusy(false);
     }
   }
 
-  function handleLogin(token) {
-    setToken(token);
-    setAuthenticated(true);
-  }
+  function handleLogin(token) { setToken(token); setAuthenticated(true); }
 
   async function handleLogout() {
     await logout();
     clearToken();
     setAuthenticated(false);
     setMoreOpen(false);
+    setLogoutConfirming(false);
   }
 
-  function updateCompanyField(name, value) {
-    setCompanyForm((current) => ({ ...current, [name]: value }));
-  }
+  /* ── Form field updaters ──────────────────────── */
+  function updateCompanyField(name, value) { setCompanyForm((c) => ({ ...c, [name]: value })); }
+  function updateSiteField(name, value) { setSiteForm((c) => ({ ...c, [name]: value })); }
+  function updateWorkerField(name, value) { setWorkerForm((c) => ({ ...c, [name]: value })); }
+  function updateBulkWorkerField(name, value) { setBulkWorkerForm((c) => ({ ...c, [name]: value })); }
 
-  function updateSiteField(name, value) {
-    setSiteForm((current) => ({ ...current, [name]: value }));
-  }
-
-  function updateWorkerField(name, value) {
-    setWorkerForm((current) => ({ ...current, [name]: value }));
-  }
-
-  function updateBulkWorkerField(name, value) {
-    setBulkWorkerForm((current) => ({ ...current, [name]: value }));
-  }
-
+  /* ── Company / Site / Worker handlers ────────── */
   async function handleSaveCompany(event) {
     event.preventDefault();
     await withBusy(async () => {
       const response = await saveCompany(companyForm);
       setCompany(response.company);
       setCompanyForm(companyFormFromCompany(response.company));
-      announce("Company settings saved.");
+      announce("Settings save ho gaye!");
     });
   }
 
   async function handleSaveSite(event) {
     event.preventDefault();
     await withBusy(async () => {
-      if (editingSiteId) {
-        await updateSite(editingSiteId, siteForm);
-        announce("Site updated.");
-      } else {
-        await createSite(siteForm);
-        announce("Site added.");
-      }
-
+      if (editingSiteId) { await updateSite(editingSiteId, siteForm); announce("Site update ho gaya."); }
+      else { await createSite(siteForm); announce("Site jod diya!"); }
       setSiteForm(emptySiteForm());
       setEditingSiteId("");
       await loadBootstrap(month);
@@ -636,14 +651,16 @@ function App() {
   }
 
   async function handleDeleteSite(siteId) {
-    if (!window.confirm("Delete this site? Workers assigned to it must be moved or removed first.")) {
+    if (deletingSiteId !== siteId) {
+      setDeletingSiteId(siteId);
+      setTimeout(() => setDeletingSiteId((d) => (d === siteId ? "" : d)), 8000);
       return;
     }
-
+    setDeletingSiteId("");
     await withBusy(async () => {
       await deleteSite(siteId);
       if (siteFilter === siteId) setSiteFilter("all");
-      announce("Site deleted.");
+      announce("Site delete ho gaya.");
       await loadBootstrap(month);
     });
   }
@@ -651,14 +668,8 @@ function App() {
   async function handleSaveWorker(event) {
     event.preventDefault();
     await withBusy(async () => {
-      if (editingWorkerId) {
-        await updateWorker(editingWorkerId, workerForm);
-        announce("Worker updated.");
-      } else {
-        await createWorker(workerForm);
-        announce("Worker added.");
-      }
-
+      if (editingWorkerId) { await updateWorker(editingWorkerId, workerForm); announce("Worker update ho gaya."); }
+      else { await createWorker(workerForm); announce("Worker jod diya!"); }
       setWorkerForm(emptyWorkerForm());
       setEditingWorkerId("");
       await loadBootstrap(month);
@@ -666,11 +677,15 @@ function App() {
   }
 
   async function handleDeleteWorker(workerId) {
-    if (!window.confirm("Delete this worker and all saved attendance for them?")) return;
-
+    if (deletingWorkerId !== workerId) {
+      setDeletingWorkerId(workerId);
+      setTimeout(() => setDeletingWorkerId((d) => (d === workerId ? "" : d)), 8000);
+      return;
+    }
+    setDeletingWorkerId("");
     await withBusy(async () => {
       await deleteWorker(workerId);
-      announce("Worker deleted.");
+      announce("Worker delete ho gaya.");
       await loadBootstrap(month);
     });
   }
@@ -678,57 +693,45 @@ function App() {
   async function handleBulkAddWorkers(event) {
     event.preventDefault();
     const names = parseBulkWorkerNames(bulkWorkerForm.names);
-    if (!names.length) {
-      setError("Paste at least one worker name to add a crew.");
-      return;
-    }
-
-    const selectedSiteName = sites.find((site) => site.id === bulkWorkerForm.siteId)?.name || "";
+    if (!names.length) { setError("Paste at least one worker name."); return; }
+    const selectedSiteName = sites.find((s) => s.id === bulkWorkerForm.siteId)?.name || "";
     const beforeCount = workers.length;
-
     await withBusy(async () => {
       const response = await importBatch({
         sites: [],
         workers: names.map((name) => ({
-          name,
-          role: bulkWorkerForm.role || "Helper",
+          name, role: bulkWorkerForm.role || "Helper",
           dailyWage: bulkWorkerForm.dailyWage || 550,
-          uan: "",
-          esiNumber: "",
-          siteName: selectedSiteName,
-          active: bulkWorkerForm.active,
+          uan: "", esiNumber: "", siteName: selectedSiteName, active: bulkWorkerForm.active,
         })),
       });
-
-      const addedCount = Math.max(response.workers.length - beforeCount, 0);
+      const added = Math.max(response.workers.length - beforeCount, 0);
       setBulkWorkerForm(emptyBulkWorkerForm());
-      announce(`${addedCount} workers added in one go.`);
+      announce(`${added} workers jod diye!`);
       await loadBootstrap(month);
     });
   }
 
   async function handleLoadDemoCrew() {
-    if (!window.confirm("Load a large demo crew with realistic worker names and sites?")) return;
-
+    if (!loadDemoConfirming) {
+      setLoadDemoConfirming(true);
+      setTimeout(() => setLoadDemoConfirming(false), 8000);
+      return;
+    }
+    setLoadDemoConfirming(false);
     const beforeCount = workers.length;
     const payload = buildDemoImportPayload(sites, beforeCount);
-
     await withBusy(async () => {
       const response = await importBatch(payload);
-      const addedCount = Math.max(response.workers.length - beforeCount, 0);
-      announce(`${addedCount} demo workers loaded for testing.`);
+      const added = Math.max(response.workers.length - beforeCount, 0);
+      announce(`${added} demo workers load ho gaye!`);
       await loadBootstrap(month);
     });
   }
 
-  function isFutureDay(day) {
-    return Number(day) > todayDay;
-  }
-
-  function isPastDay(day) {
-    return Number(day) < todayDay;
-  }
-
+  /* ── Attendance handlers ──────────────────────── */
+  function isFutureDay(day) { return Number(day) > todayDay; }
+  function isPastDay(day) { return Number(day) < todayDay; }
   function isAttendanceEditable(day) {
     if (isFutureDay(day)) return false;
     if (Number(day) === todayDay) return true;
@@ -738,74 +741,75 @@ function App() {
   async function handleToggleAttendance(workerId, day, options = {}) {
     const dayKey = String(day);
     const allowPastEdit = Boolean(options.overridePastEdit);
-    const dayNumber = Number(dayKey);
-
-    if (dayNumber > todayDay) {
-      setError("Future dates cannot be updated yet.");
-      return;
-    }
-
-    if (dayNumber < todayDay && !allowPastEdit) {
-      setError("Past dates are locked. Enable correction mode to edit older attendance.");
-      return;
-    }
-
+    const dayNum = Number(dayKey);
+    if (dayNum > todayDay) { setError("Future dates cannot be updated yet."); return; }
+    if (dayNum < todayDay && !allowPastEdit) { setError("Past dates are locked. Enable correction mode for older dates."); return; }
     clearMessages();
-    const currentAttendance = attendance[workerId] || createDefaultAttendanceMap(month, {});
-    const nextStatus = nextAttendanceStatus(currentAttendance[dayKey]);
-
-    setAttendance((current) => ({
-      ...current,
-      [workerId]: { ...currentAttendance, [dayKey]: nextStatus },
-    }));
-
+    const cellKey = `${workerId}-${dayKey}`;
+    const curAtt = attendance[workerId] || createDefaultAttendanceMap(month, {});
+    const nextStatus = nextAttendanceStatus(curAtt[dayKey]);
+    setAttendance((cur) => ({ ...cur, [workerId]: { ...curAtt, [dayKey]: nextStatus } }));
+    setSavingCells((prev) => { const n = new Set(prev); n.add(cellKey); return n; });
     try {
-      const response = await updateAttendance({
-        month,
-        workerId,
-        day: dayKey,
-        status: nextStatus,
-        overridePastEdit: allowPastEdit,
-      });
+      const response = await updateAttendance({ month, workerId, day: dayKey, status: nextStatus, overridePastEdit: allowPastEdit });
       setAttendance(response.attendance);
-    } catch (attendanceError) {
-      setError(attendanceError.message);
+      setSavedCells((prev) => { const n = new Set(prev); n.add(cellKey); return n; });
+      setTimeout(() => setSavedCells((prev) => { const n = new Set(prev); n.delete(cellKey); return n; }), 1500);
+    } catch (attError) {
+      setError(attError.message);
       await loadBootstrap(month);
+    } finally {
+      setSavingCells((prev) => { const n = new Set(prev); n.delete(cellKey); return n; });
     }
   }
 
+  async function handleMarkAllPresent() {
+    setMarkAllConfirming(false);
+    const rows = attendanceRows;
+    let changed = 0;
+    for (const row of rows) {
+      if (row.attendance[todayDayKey] !== "P") {
+        const curAtt = attendance[row.id] || createDefaultAttendanceMap(month, {});
+        setAttendance((cur) => ({ ...cur, [row.id]: { ...curAtt, [todayDayKey]: "P" } }));
+        changed++;
+        try {
+          const response = await updateAttendance({ month, workerId: row.id, day: todayDayKey, status: "P", overridePastEdit: false });
+          setAttendance(response.attendance);
+        } catch (_) { /* silent */ }
+      }
+    }
+    showToast(`${rows.length} workers ko present mark kiya!`, "success");
+  }
+
+  /* ── Chat handler ─────────────────────────────── */
   async function handleSendChat(event) {
-    event.preventDefault();
+    if (event) event.preventDefault();
     const trimmed = chatInput.trim();
     if (!trimmed || chatLoading) return;
-
-    const userMessage = { role: "user", content: trimmed };
+    const userMessage = { role: "user", content: trimmed, timestamp: new Date() };
     const nextMessages = [...chatMessages, userMessage];
     setChatMessages(nextMessages);
     setChatInput("");
     setChatLoading(true);
-
     try {
       const response = await sendChat(nextMessages, month, siteFilter);
-      setChatMessages((current) => [...current, { role: "assistant", content: response.text }]);
+      setChatMessages((cur) => [...cur, { role: "assistant", content: response.text, timestamp: new Date() }]);
     } catch (chatError) {
-      setChatMessages((current) => [
-        ...current,
-        {
-          role: "assistant",
-          content: `AI assistant abhi available nahi hai. Internet aur GROQ_API_KEY check karo. (${chatError.message})`,
-        },
+      setChatMessages((cur) => [
+        ...cur,
+        { role: "assistant", content: `AI assistant abhi available nahi hai. Internet aur GROQ_API_KEY check karo. (${chatError.message})`, timestamp: new Date() },
       ]);
     } finally {
       setChatLoading(false);
     }
   }
 
+  /* ── CSV Import ───────────────────────────────── */
   function handleSitesFileChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (loadEvent) => setImportSitesText(loadEvent.target.result || "");
+    reader.onload = (e) => setImportSitesText(e.target.result || "");
     reader.readAsText(file);
   }
 
@@ -813,42 +817,26 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (loadEvent) => setImportWorkersText(loadEvent.target.result || "");
+    reader.onload = (e) => setImportWorkersText(e.target.result || "");
     reader.readAsText(file);
   }
 
   function handlePreviewImport() {
     const parsedSites = importSitesText.trim() ? parseCSV(importSitesText) : [];
     const parsedWorkers = importWorkersText.trim() ? parseCSV(importWorkersText) : [];
-
-    const mappedSites = parsedSites.map((row) => ({
-      name: row["Site Name"] || row.name || "",
-      clientName: row["Client Name"] || row.clientName || "",
-      location: row.Location || row.location || "",
-    }));
-
-    const mappedWorkers = parsedWorkers.map((row) => ({
-      name: row.Name || row.name || "",
-      role: row.Role || row.role || "",
-      dailyWage: row["Daily Wage"] || row.dailyWage || 0,
-      uan: row.UAN || row.uan || "",
-      esiNumber: row["ESI Number"] || row.esiNumber || "",
-      siteName: row["Site Name"] || row.siteName || "",
-    }));
-
-    setImportPreview({ sites: mappedSites, workers: mappedWorkers });
+    setImportPreview({
+      sites: parsedSites.map((r) => ({ name: r["Site Name"] || r.name || "", clientName: r["Client Name"] || r.clientName || "", location: r.Location || r.location || "" })),
+      workers: parsedWorkers.map((r) => ({ name: r.Name || r.name || "", role: r.Role || r.role || "", dailyWage: r["Daily Wage"] || r.dailyWage || 0, uan: r.UAN || r.uan || "", esiNumber: r["ESI Number"] || r.esiNumber || "", siteName: r["Site Name"] || r.siteName || "" })),
+    });
   }
 
   async function handleRunImport() {
     if (!importPreview) return;
     setImportBusy(true);
     clearMessages();
-
     try {
       const response = await importBatch(importPreview);
-      announce(
-        `${response.sites.length} sites and ${response.workers.length} workers are now in the account.`,
-      );
+      announce(`${response.sites.length} sites aur ${response.workers.length} workers import ho gaye!`);
       setImportPreview(null);
       setImportSitesText("");
       setImportWorkersText("");
@@ -860,55 +848,63 @@ function App() {
     }
   }
 
+  /* ════════════════════════════════════════════════
+     RENDER FUNCTIONS
+  ════════════════════════════════════════════════ */
+
   function renderDashboard() {
     return (
       <div className="stack">
         <div className="surface panel hero-panel">
           <SectionHeader
-            eyebrow="Month locked for daily use"
-            title={`Running live for ${monthTitle}`}
-            sub="The shell is focused on the current month only. Mark today from Attendance, use correction mode only when a past date truly needs fixing, and track live payroll and invoice values from here."
+            eyebrow={`Month locked: ${monthTitle}`}
+            title="Today's Overview"
+            sub="Mark today's haziri from the Attendance tab. All numbers below update in real time."
             help={TAB_HELP.dashboard}
             actions={
               <div className="hero-tags">
-                <span className="status-pill">{monthModel.rows.length} workers in view</span>
+                <span className="status-pill">{monthModel.rows.length} workers</span>
                 <span className="status-pill">{selectedSite ? selectedSite.name : "All sites"}</span>
                 <span className="status-pill">{todaySummary.P} present today</span>
               </div>
             }
           />
+          <button className="btn cta-attendance" type="button" onClick={() => setTab("attendance")}>
+            ✔ Aaj ki haziri lagao →
+          </button>
+          {lastSynced && <p className="last-synced">Last synced: {formatTimeAgo(lastSynced)}</p>}
         </div>
 
         <div className="grid metrics-grid">
           <MetricCard
-            label="Workers In Scope"
-            value={String(monthModel.rows.length)}
-            sub={`${activeWorkers} active across the account`}
-          />
-          <MetricCard
-            label="Gross Wages"
-            value={formatCurrency(monthModel.totals.gross)}
-            sub="Month-to-date live wage total"
+            label="Present Today"
+            value={String(todaySummary.P)}
+            sub={`Absent: ${todaySummary.A} | HD: ${todaySummary.HD} | OT: ${todaySummary.OT}`}
+            colorClass="metric-card-present"
           />
           <MetricCard
             label="Net Payable"
             value={formatCurrency(monthModel.totals.net)}
-            sub={`PF ${formatCurrency(monthModel.totals.pfEmployee)} and ESI ${formatCurrency(monthModel.totals.esiEmployee)}`}
+            sub={`PF ${formatCurrency(monthModel.totals.pfEmployee)} + ESI ${formatCurrency(monthModel.totals.esiEmployee)}`}
+            colorClass="metric-card-net"
+          />
+          <MetricCard
+            label="Gross Wages"
+            value={formatCurrency(monthModel.totals.gross)}
+            sub="Month-to-date live total"
+            colorClass="metric-card-gross"
           />
           <MetricCard
             label="Invoice Value"
             value={formatCurrency(monthModel.totals.invoiceTotal)}
-            sub={`Service charge ${monthModel.rules.serviceChargeRate}% and GST ${monthModel.rules.gstRate}%`}
+            sub={`SC ${monthModel.rules.serviceChargeRate}% + GST ${monthModel.rules.gstRate}%`}
+            colorClass="metric-card-invoice"
           />
         </div>
 
         <div className="split">
           <div className="surface panel">
-            <SectionHeader
-              title="Site Performance"
-              sub="Use the site pills in the header to focus one client or one location."
-              help="This section compares worker count and live wage values site by site for the current filter."
-            />
+            <SectionHeader title="Site Performance" sub="Live wages per site for the current filter." help="Compare worker count and wages site by site." />
             <div className="stack">
               {dashboardSiteSummaries.length ? (
                 dashboardSiteSummaries.map((site) => (
@@ -921,39 +917,34 @@ function App() {
                       <div className="status-pill">{site.workerCount} workers</div>
                     </div>
                     <div className="list-summary">
-                      <div>
-                        <span>Gross</span>
-                        <strong>{formatCurrency(site.gross)}</strong>
-                      </div>
-                      <div>
-                        <span>Net</span>
-                        <strong>{formatCurrency(site.net)}</strong>
-                      </div>
+                      <div><span>Gross</span><strong>{formatCurrency(site.gross)}</strong></div>
+                      <div><span>Net</span><strong>{formatCurrency(site.net)}</strong></div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="empty-state">No site is available for this filter yet.</div>
+                <div className="empty-state">
+                  <div className="empty-state-icon">🏗</div>
+                  <h4>Koi site nahi hai</h4>
+                  <p>Setup mein jaake pehle site add karo.</p>
+                  <button className="btn" type="button" onClick={() => setTab("setup")}>Setup kholein</button>
+                </div>
               )}
             </div>
           </div>
 
           <div className="surface panel">
-            <SectionHeader
-              title="Quick Signals"
-              sub="A short operational snapshot for owner review."
-              help="These cards pull from company settings and today attendance so the main dashboard stays easy to scan."
-            />
+            <SectionHeader title="Quick Signals" sub="Today's snapshot at a glance." help="Pulled from company settings and today's attendance." />
             <div className="stack">
               <div className="mini-card">
-                <h4>Today Attendance</h4>
-                <p>Present: {todaySummary.P}</p>
-                <p>Absent: {todaySummary.A}</p>
-                <p>Half day: {todaySummary.HD}</p>
-                <p>Overtime: {todaySummary.OT}</p>
+                <h4>Aaj ki haziri</h4>
+                <p>Present: <strong>{todaySummary.P}</strong></p>
+                <p>Absent: <strong>{todaySummary.A}</strong></p>
+                <p>Half day: <strong>{todaySummary.HD}</strong></p>
+                <p>Overtime: <strong>{todaySummary.OT}</strong></p>
               </div>
               <div className="mini-card">
-                <h4>Compliance Snapshot</h4>
+                <h4>Compliance</h4>
                 <p>GSTIN: {company.gstin || "Not set"}</p>
                 <p>PF: {company.pfRegistration || "Not set"}</p>
                 <p>ESI: {company.esiRegistration || "Not set"}</p>
@@ -963,7 +954,7 @@ function App() {
                 <h4>Current Rules</h4>
                 <p>PF cap: {formatCurrency(monthModel.rules.pfCap)}</p>
                 <p>ESI threshold: {formatCurrency(monthModel.rules.esiThreshold)}</p>
-                <p>Overtime multiplier: {monthModel.rules.overtimeMultiplier}x</p>
+                <p>OT multiplier: {monthModel.rules.overtimeMultiplier}x</p>
                 <p>Service charge: {monthModel.rules.serviceChargeRate}%</p>
               </div>
             </div>
@@ -974,429 +965,280 @@ function App() {
   }
 
   function renderSetup() {
+    const activeCount = workers.filter((w) => w.active).length;
+    const inactiveCount = workers.length - activeCount;
+    const siteCountMap = {};
+    workers.forEach((w) => {
+      const sn = siteMap.get(w.siteId)?.name || "Unassigned";
+      siteCountMap[sn] = (siteCountMap[sn] || 0) + 1;
+    });
+
     return (
       <div className="stack">
+        {/* ── Company Form ── */}
         <form className="surface panel" onSubmit={handleSaveCompany}>
           <SectionHeader
             eyebrow="Base account setup"
-            title="Company Profile And Rules"
-            sub="These values drive payroll, invoice numbers, and document exports. Keep them clean before daily use starts."
-            help="Save company details here once, then review only when rates or registrations change."
-            actions={
-              <div className="status-pill">
-                {company.businessName || "Business profile not filled yet"}
-              </div>
-            }
+            title="Company Profile & Rules"
+            sub="Fill Business Info first. Rates and registrations can be set later."
+            help="Save once, then revisit only when rates or registrations change."
+            actions={<div className="status-pill">{company.businessName || "Profile not filled"}</div>}
           />
 
-          <div className="field-grid">
-            <Field label="Business Name">
-              <input
-                value={companyForm.businessName}
-                onChange={(event) => updateCompanyField("businessName", event.target.value)}
-                placeholder="Shree Ganesh Labour Contractor"
-              />
-            </Field>
-            <Field label="Owner Name">
-              <input
-                value={companyForm.ownerName}
-                onChange={(event) => updateCompanyField("ownerName", event.target.value)}
-              />
-            </Field>
-            <Field label="Phone">
-              <input
-                value={companyForm.phone}
-                onChange={(event) => updateCompanyField("phone", event.target.value)}
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                value={companyForm.email}
-                onChange={(event) => updateCompanyField("email", event.target.value)}
-              />
-            </Field>
-            <Field label="Address" full>
-              <textarea
-                value={companyForm.address}
-                onChange={(event) => updateCompanyField("address", event.target.value)}
-              />
-            </Field>
-            <Field label="GSTIN">
-              <input
-                value={companyForm.gstin}
-                onChange={(event) => updateCompanyField("gstin", event.target.value)}
-              />
-            </Field>
-            <Field label="CLRA License">
-              <input
-                value={companyForm.clraLicense}
-                onChange={(event) => updateCompanyField("clraLicense", event.target.value)}
-              />
-            </Field>
-            <Field label="PF Registration">
-              <input
-                value={companyForm.pfRegistration}
-                onChange={(event) => updateCompanyField("pfRegistration", event.target.value)}
-              />
-            </Field>
-            <Field label="ESI Registration">
-              <input
-                value={companyForm.esiRegistration}
-                onChange={(event) => updateCompanyField("esiRegistration", event.target.value)}
-              />
-            </Field>
-            <Field label="Service Charge %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.serviceChargeRate}
-                onChange={(event) => updateCompanyField("serviceChargeRate", event.target.value)}
-              />
-            </Field>
-            <Field label="GST %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.gstRate}
-                onChange={(event) => updateCompanyField("gstRate", event.target.value)}
-              />
-            </Field>
-            <Field label="PF Employee %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.pfEmployeeRate}
-                onChange={(event) => updateCompanyField("pfEmployeeRate", event.target.value)}
-              />
-            </Field>
-            <Field label="PF Employer %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.pfEmployerRate}
-                onChange={(event) => updateCompanyField("pfEmployerRate", event.target.value)}
-              />
-            </Field>
-            <Field label="PF Wage Cap">
-              <input
-                type="number"
-                value={companyForm.pfCap}
-                onChange={(event) => updateCompanyField("pfCap", event.target.value)}
-              />
-            </Field>
-            <Field label="ESI Employee %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.esiEmployeeRate}
-                onChange={(event) => updateCompanyField("esiEmployeeRate", event.target.value)}
-              />
-            </Field>
-            <Field label="ESI Employer %">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.esiEmployerRate}
-                onChange={(event) => updateCompanyField("esiEmployerRate", event.target.value)}
-              />
-            </Field>
-            <Field label="ESI Threshold">
-              <input
-                type="number"
-                value={companyForm.esiThreshold}
-                onChange={(event) => updateCompanyField("esiThreshold", event.target.value)}
-              />
-            </Field>
-            <Field label="OT Multiplier">
-              <input
-                type="number"
-                step="0.01"
-                value={companyForm.overtimeMultiplier}
-                onChange={(event) => updateCompanyField("overtimeMultiplier", event.target.value)}
-              />
-            </Field>
-          </div>
+          <CollapsibleSection title="Business Info" defaultOpen={true}>
+            <div className="field-grid">
+              <Field label="Business Name">
+                <input value={companyForm.businessName} onChange={(e) => updateCompanyField("businessName", e.target.value)} placeholder="Shree Ganesh Labour Contractor" />
+              </Field>
+              <Field label="Owner Name">
+                <input value={companyForm.ownerName} onChange={(e) => updateCompanyField("ownerName", e.target.value)} />
+              </Field>
+              <Field label="Phone">
+                <input value={companyForm.phone} onChange={(e) => updateCompanyField("phone", e.target.value)} inputMode="tel" />
+              </Field>
+              <Field label="Email">
+                <input value={companyForm.email} onChange={(e) => updateCompanyField("email", e.target.value)} inputMode="email" />
+              </Field>
+              <Field label="Address" full>
+                <textarea value={companyForm.address} onChange={(e) => updateCompanyField("address", e.target.value)} />
+              </Field>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Registration Numbers">
+            <div className="field-grid">
+              <Field label="GSTIN">
+                <input value={companyForm.gstin} onChange={(e) => updateCompanyField("gstin", e.target.value)} placeholder="27XXXXX..." />
+              </Field>
+              <Field label="CLRA License">
+                <input value={companyForm.clraLicense} onChange={(e) => updateCompanyField("clraLicense", e.target.value)} />
+              </Field>
+              <Field label="PF Registration">
+                <input value={companyForm.pfRegistration} onChange={(e) => updateCompanyField("pfRegistration", e.target.value)} />
+              </Field>
+              <Field label="ESI Registration">
+                <input value={companyForm.esiRegistration} onChange={(e) => updateCompanyField("esiRegistration", e.target.value)} />
+              </Field>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Rate Settings">
+            <div className="field-grid">
+              <Field label="Service Charge %">
+                <input type="number" step="0.01" value={companyForm.serviceChargeRate} onChange={(e) => updateCompanyField("serviceChargeRate", e.target.value)} />
+              </Field>
+              <Field label="GST %">
+                <input type="number" step="0.01" value={companyForm.gstRate} onChange={(e) => updateCompanyField("gstRate", e.target.value)} />
+              </Field>
+              <Field label="PF Employee %">
+                <input type="number" step="0.01" value={companyForm.pfEmployeeRate} onChange={(e) => updateCompanyField("pfEmployeeRate", e.target.value)} />
+              </Field>
+              <Field label="PF Employer %">
+                <input type="number" step="0.01" value={companyForm.pfEmployerRate} onChange={(e) => updateCompanyField("pfEmployerRate", e.target.value)} />
+              </Field>
+              <Field label="PF Wage Cap">
+                <input type="number" value={companyForm.pfCap} onChange={(e) => updateCompanyField("pfCap", e.target.value)} />
+              </Field>
+              <Field label="ESI Employee %">
+                <input type="number" step="0.01" value={companyForm.esiEmployeeRate} onChange={(e) => updateCompanyField("esiEmployeeRate", e.target.value)} />
+              </Field>
+              <Field label="ESI Employer %">
+                <input type="number" step="0.01" value={companyForm.esiEmployerRate} onChange={(e) => updateCompanyField("esiEmployerRate", e.target.value)} />
+              </Field>
+              <Field label="ESI Threshold">
+                <input type="number" value={companyForm.esiThreshold} onChange={(e) => updateCompanyField("esiThreshold", e.target.value)} />
+              </Field>
+              <Field label="OT Multiplier">
+                <input type="number" step="0.01" value={companyForm.overtimeMultiplier} onChange={(e) => updateCompanyField("overtimeMultiplier", e.target.value)} />
+              </Field>
+            </div>
+          </CollapsibleSection>
 
           <div className="button-row" style={{ marginTop: 18 }}>
             <button className="btn" type="submit" disabled={busy}>
-              Save company settings
+              {busy ? "Saving..." : "Save company settings"}
             </button>
           </div>
         </form>
 
+        {/* ── Sites & Workers ── */}
         <div className="split">
+          {/* Sites */}
           <div className="surface panel">
-            <SectionHeader
-              title="Sites"
-              sub="Create sites first so workers can be assigned cleanly."
-              help="A site keeps worker, payroll, and invoice reporting grouped correctly."
-            />
-
+            <SectionHeader title="Sites" sub="Create sites first, then assign workers." help="A site keeps workers, payroll, and invoices grouped correctly." />
             <form className="stack" onSubmit={handleSaveSite}>
               <div className="field-grid">
                 <Field label="Site Name">
-                  <input
-                    value={siteForm.name}
-                    onChange={(event) => updateSiteField("name", event.target.value)}
-                    placeholder="Tema India"
-                  />
+                  <input value={siteForm.name} onChange={(e) => updateSiteField("name", e.target.value)} placeholder="Tema India" />
                 </Field>
                 <Field label="Client Name">
-                  <input
-                    value={siteForm.clientName}
-                    onChange={(event) => updateSiteField("clientName", event.target.value)}
-                    placeholder="Tema India Pvt Ltd"
-                  />
+                  <input value={siteForm.clientName} onChange={(e) => updateSiteField("clientName", e.target.value)} placeholder="Tema India Pvt Ltd" />
                 </Field>
                 <Field label="Location" full>
-                  <input
-                    value={siteForm.location}
-                    onChange={(event) => updateSiteField("location", event.target.value)}
-                    placeholder="Achhad, Talasari"
-                  />
+                  <input value={siteForm.location} onChange={(e) => updateSiteField("location", e.target.value)} placeholder="Achhad, Talasari" />
                 </Field>
               </div>
-
               <div className="button-row">
-                <button className="btn" type="submit" disabled={busy}>
-                  {editingSiteId ? "Update site" : "Add site"}
-                </button>
+                <button className="btn" type="submit" disabled={busy}>{editingSiteId ? "Update site" : "Add site"}</button>
                 {editingSiteId ? (
-                  <button
-                    className="btn-ghost"
-                    type="button"
-                    onClick={() => {
-                      setEditingSiteId("");
-                      setSiteForm(emptySiteForm());
-                    }}
-                  >
-                    Cancel edit
-                  </button>
+                  <button className="btn-ghost" type="button" onClick={() => { setEditingSiteId(""); setSiteForm(emptySiteForm()); }}>Cancel</button>
                 ) : null}
               </div>
             </form>
 
             <div className="stack" style={{ marginTop: 18 }}>
-              {sites.length ? (
-                sites.map((site) => (
-                  <div className="list-card" key={site.id}>
-                    <div className="list-header">
-                      <div>
-                        <h4>{site.name}</h4>
-                        <p>{site.clientName || "No client name"}</p>
-                      </div>
-                      <div className="button-row">
-                        <button
-                          className="btn-ghost"
-                          type="button"
-                          onClick={() => {
-                            setEditingSiteId(site.id);
-                            setSiteForm({
-                              name: site.name,
-                              clientName: site.clientName,
-                              location: site.location,
-                            });
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn-ghost btn-danger"
-                          type="button"
-                          onClick={() => handleDeleteSite(site.id)}
-                        >
-                          Delete
-                        </button>
-                      </div>
+              {sites.length ? sites.map((site) => (
+                <div className="list-card" key={site.id}>
+                  <div className="list-header">
+                    <div>
+                      <h4>{site.name}</h4>
+                      <p>{site.clientName || "No client name"}</p>
                     </div>
-                    <p className="muted" style={{ marginTop: 12 }}>
-                      {site.location || "No location set"}
-                    </p>
+                    {deletingSiteId === site.id ? (
+                      <div className="confirm-inline-cell">
+                        <span>Delete karein?</span>
+                        <button className="btn-ghost btn-danger" type="button" style={{ padding: "7px 12px" }} onClick={() => handleDeleteSite(site.id)}>Haan</button>
+                        <button className="btn-ghost" type="button" style={{ padding: "7px 12px" }} onClick={() => setDeletingSiteId("")}>Nahi</button>
+                      </div>
+                    ) : (
+                      <div className="button-row">
+                        <button className="btn-ghost" type="button" onClick={() => { setEditingSiteId(site.id); setSiteForm({ name: site.name, clientName: site.clientName, location: site.location }); }}>Edit</button>
+                        <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteSite(site.id)}>Delete</button>
+                      </div>
+                    )}
                   </div>
-                ))
-              ) : (
-                <div className="empty-state">Add your first site to start assigning workers.</div>
+                  <p className="muted" style={{ marginTop: 10 }}>{site.location || "No location set"}</p>
+                </div>
+              )) : (
+                <div className="empty-state">
+                  <div className="empty-state-icon">📍</div>
+                  <h4>Koi site nahi hai</h4>
+                  <p>Pehla site add karein taaki workers assign ho sakein.</p>
+                </div>
               )}
             </div>
           </div>
 
+          {/* Workers */}
           <div className="surface panel">
             <SectionHeader
               title="Workers"
-              sub="Use quick add for large crews, then use the form below only for single edits or one-off additions."
-              help="For a 50 to 100 worker contractor, the fastest flow is: create sites, paste names in quick add, then use the search box when you need edits."
+              sub="Quick add fastest hai bade crews ke liye."
+              help="For 50-100 workers: create sites, paste names in quick add, then use search for edits."
               actions={<div className="status-pill">{visibleWorkers.length} shown</div>}
             />
 
-            <div className="mini-card quick-add-card">
-              <SectionHeader
-                title="Quick Add Crew"
-                sub="Paste one worker name per line. Shared role, wage, and site are applied to all of them."
-                help="This is the easiest way to load a real contractor crew without creating workers one by one."
-              />
+            {workers.length > 0 && (
+              <div className="workers-count-summary">
+                <span><strong>{workers.length}</strong> total workers</span>
+                <span>(<strong>{activeCount}</strong> active, <strong>{inactiveCount}</strong> inactive)</span>
+                {Object.entries(siteCountMap).map(([sn, cnt]) => (
+                  <span key={sn} style={{ background: "var(--accent-soft)", padding: "2px 8px", borderRadius: 999, fontSize: 12 }}>{sn}: {cnt}</span>
+                ))}
+              </div>
+            )}
 
+            {/* Quick Add */}
+            <div className="mini-card quick-add-card">
+              <SectionHeader title="Quick Add Crew" sub="Paste one name per line. Same role, wage, and site applied to all." help="Fastest way to load a real contractor crew." />
               <form className="stack" onSubmit={handleBulkAddWorkers}>
-                <Field label="Worker Names" full hint="One name per line">
+                <Field label="Worker Names" full hint="Ek naam per line">
                   <textarea
                     value={bulkWorkerForm.names}
-                    onChange={(event) => updateBulkWorkerField("names", event.target.value)}
+                    onChange={(e) => updateBulkWorkerField("names", e.target.value)}
                     placeholder={"Ramesh Patel\nSuresh Yadav\nDinesh Kumar"}
                   />
                 </Field>
-
+                {bulkWorkerForm.names.trim() && (
+                  <p className="field-hint" style={{ marginTop: -4 }}>
+                    {parseBulkWorkerNames(bulkWorkerForm.names).length} names entered
+                  </p>
+                )}
                 <div className="field-grid">
                   <Field label="Common Role">
-                    <input
-                      value={bulkWorkerForm.role}
-                      onChange={(event) => updateBulkWorkerField("role", event.target.value)}
-                    />
+                    <input value={bulkWorkerForm.role} onChange={(e) => updateBulkWorkerField("role", e.target.value)} />
                   </Field>
                   <Field label="Daily Wage">
-                    <input
-                      type="number"
-                      value={bulkWorkerForm.dailyWage}
-                      onChange={(event) => updateBulkWorkerField("dailyWage", event.target.value)}
-                    />
+                    <input type="number" value={bulkWorkerForm.dailyWage} onChange={(e) => updateBulkWorkerField("dailyWage", e.target.value)} />
                   </Field>
                   <Field label="Site">
-                    <select
-                      value={bulkWorkerForm.siteId}
-                      onChange={(event) => updateBulkWorkerField("siteId", event.target.value)}
-                    >
+                    <select value={bulkWorkerForm.siteId} onChange={(e) => updateBulkWorkerField("siteId", e.target.value)}>
                       <option value="">Unassigned</option>
-                      {sites.map((site) => (
-                        <option key={site.id} value={site.id}>
-                          {site.name}
-                        </option>
-                      ))}
+                      {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </Field>
                   <Field label="Status">
-                    <select
-                      value={bulkWorkerForm.active ? "active" : "inactive"}
-                      onChange={(event) =>
-                        updateBulkWorkerField("active", event.target.value === "active")
-                      }
-                    >
+                    <select value={bulkWorkerForm.active ? "active" : "inactive"} onChange={(e) => updateBulkWorkerField("active", e.target.value === "active")}>
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select>
                   </Field>
                 </div>
-
                 <div className="button-row">
-                  <button className="btn" type="submit" disabled={busy}>
-                    Add pasted crew
-                  </button>
-                  <button className="btn-ghost" type="button" onClick={handleLoadDemoCrew} disabled={busy}>
-                    Load 72 demo workers
-                  </button>
+                  <button className="btn" type="submit" disabled={busy}>Add pasted crew</button>
+                  {loadDemoConfirming ? (
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                      <span style={{ color: "var(--muted)" }}>72 demo workers load karein?</span>
+                      <button className="btn" type="button" onClick={handleLoadDemoCrew} disabled={busy} style={{ padding: "8px 14px", fontSize: 13 }}>Haan</button>
+                      <button className="btn-ghost" type="button" onClick={() => setLoadDemoConfirming(false)} style={{ padding: "8px 14px", fontSize: 13 }}>Nahi</button>
+                    </span>
+                  ) : (
+                    <button className="btn-ghost" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Load 72 demo workers</button>
+                  )}
                 </div>
               </form>
             </div>
 
+            {/* Single Worker Form */}
             <form className="stack" onSubmit={handleSaveWorker} style={{ marginTop: 18 }}>
-              <SectionHeader
-                title={editingWorkerId ? "Edit Single Worker" : "Add Single Worker"}
-                sub="Use this form for one worker at a time."
-                help="Single worker mode is best for quick corrections after the crew already exists."
-              />
-
+              <SectionHeader title={editingWorkerId ? "Edit Worker" : "Add Single Worker"} sub="Ek worker at a time." help="Best for quick corrections after the crew already exists." />
               <div className="field-grid">
                 <Field label="Worker Name">
-                  <input
-                    value={workerForm.name}
-                    onChange={(event) => updateWorkerField("name", event.target.value)}
-                    placeholder="Ramesh Patel"
-                  />
+                  <input value={workerForm.name} onChange={(e) => updateWorkerField("name", e.target.value)} placeholder="Ramesh Patel" />
                 </Field>
                 <Field label="Role">
-                  <input
-                    value={workerForm.role}
-                    onChange={(event) => updateWorkerField("role", event.target.value)}
-                    placeholder="Fitter"
-                  />
+                  <input value={workerForm.role} onChange={(e) => updateWorkerField("role", e.target.value)} placeholder="Fitter" />
                 </Field>
                 <Field label="Daily Wage">
-                  <input
-                    type="number"
-                    value={workerForm.dailyWage}
-                    onChange={(event) => updateWorkerField("dailyWage", event.target.value)}
-                    placeholder="650"
-                  />
+                  <input type="number" value={workerForm.dailyWage} onChange={(e) => updateWorkerField("dailyWage", e.target.value)} placeholder="650" />
                 </Field>
                 <Field label="Site">
-                  <select
-                    value={workerForm.siteId}
-                    onChange={(event) => updateWorkerField("siteId", event.target.value)}
-                  >
+                  <select value={workerForm.siteId} onChange={(e) => updateWorkerField("siteId", e.target.value)}>
                     <option value="">Unassigned</option>
-                    {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
-                        {site.name}
-                      </option>
-                    ))}
+                    {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </Field>
                 <Field label="UAN">
-                  <input
-                    value={workerForm.uan}
-                    onChange={(event) => updateWorkerField("uan", event.target.value)}
-                  />
+                  <input value={workerForm.uan} onChange={(e) => updateWorkerField("uan", e.target.value)} />
                 </Field>
                 <Field label="ESI Number">
-                  <input
-                    value={workerForm.esiNumber}
-                    onChange={(event) => updateWorkerField("esiNumber", event.target.value)}
-                  />
+                  <input value={workerForm.esiNumber} onChange={(e) => updateWorkerField("esiNumber", e.target.value)} />
                 </Field>
                 <Field label="Status">
-                  <select
-                    value={workerForm.active ? "active" : "inactive"}
-                    onChange={(event) => updateWorkerField("active", event.target.value === "active")}
-                  >
+                  <select value={workerForm.active ? "active" : "inactive"} onChange={(e) => updateWorkerField("active", e.target.value === "active")}>
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
                 </Field>
               </div>
-
               <div className="button-row">
-                <button className="btn" type="submit" disabled={busy}>
-                  {editingWorkerId ? "Update worker" : "Add worker"}
-                </button>
+                <button className="btn" type="submit" disabled={busy}>{editingWorkerId ? "Update worker" : "Add worker"}</button>
                 {editingWorkerId ? (
-                  <button
-                    className="btn-ghost"
-                    type="button"
-                    onClick={() => {
-                      setEditingWorkerId("");
-                      setWorkerForm(emptyWorkerForm());
-                    }}
-                  >
-                    Cancel edit
-                  </button>
+                  <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(""); setWorkerForm(emptyWorkerForm()); }}>Cancel</button>
                 ) : null}
               </div>
             </form>
 
+            {/* Worker Search */}
             <div className="workers-toolbar">
               <Field label="Search Workers" full>
-                <input
-                  value={workerSearch}
-                  onChange={(event) => setWorkerSearch(event.target.value)}
-                  placeholder="Search by worker, role, or site"
-                />
+                <input value={workerSearch} onChange={(e) => setWorkerSearch(e.target.value)} placeholder="Naam, role, ya site se dhundo..." />
               </Field>
             </div>
 
+            {/* Workers Table (desktop) */}
             {visibleWorkers.length ? (
-              <div
-                className="table-wrap keyboard-scroll"
-                tabIndex={0}
-                onKeyDown={handleScrollableKeyDown}
-                style={{ marginTop: 16 }}
-              >
+              <div className="table-wrap keyboard-scroll workers-table-wrap" tabIndex={0} onKeyDown={handleScrollableKeyDown} style={{ marginTop: 16 }}>
                 <table className="compact-table">
                   <thead>
                     <tr>
@@ -1410,48 +1252,31 @@ function App() {
                   </thead>
                   <tbody>
                     {visibleWorkers.map((worker) => {
-                      const workerSite = siteMap.get(worker.siteId);
+                      const ws = siteMap.get(worker.siteId);
+                      const isDeleting = deletingWorkerId === worker.id;
                       return (
-                        <tr key={worker.id}>
+                        <tr key={worker.id} className={isDeleting ? "confirm-row" : ""}>
                           <td>
                             <div>{worker.name}</div>
-                            <div className="muted table-subtext">
-                              UAN {worker.uan || "not set"} and ESI {worker.esiNumber || "not set"}
-                            </div>
+                            <div className="muted table-subtext">UAN {worker.uan || "not set"} | ESI {worker.esiNumber || "not set"}</div>
                           </td>
                           <td>{worker.role || "No role"}</td>
-                          <td>{workerSite?.name || "Unassigned"}</td>
+                          <td>{ws?.name || "Unassigned"}</td>
                           <td className="mono">{formatCurrency(worker.dailyWage)}</td>
                           <td>{worker.active ? "Active" : "Inactive"}</td>
                           <td>
-                            <div className="button-row tight">
-                              <button
-                                className="btn-ghost"
-                                type="button"
-                                onClick={() => {
-                                  setEditingWorkerId(worker.id);
-                                  setWorkerForm({
-                                    name: worker.name,
-                                    role: worker.role,
-                                    dailyWage: worker.dailyWage,
-                                    uan: worker.uan,
-                                    esiNumber: worker.esiNumber,
-                                    siteId: worker.siteId,
-                                    active: worker.active,
-                                  });
-                                  pageRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="btn-ghost btn-danger"
-                                type="button"
-                                onClick={() => handleDeleteWorker(worker.id)}
-                              >
-                                Delete
-                              </button>
-                            </div>
+                            {isDeleting ? (
+                              <div className="confirm-inline-cell">
+                                <span>Delete?</span>
+                                <button className="btn-ghost btn-danger" type="button" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => handleDeleteWorker(worker.id)}>Haan</button>
+                                <button className="btn-ghost" type="button" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setDeletingWorkerId("")}>Nahi</button>
+                              </div>
+                            ) : (
+                              <div className="button-row tight">
+                                <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(worker.id); setWorkerForm({ name: worker.name, role: worker.role, dailyWage: worker.dailyWage, uan: worker.uan, esiNumber: worker.esiNumber, siteId: worker.siteId, active: worker.active }); pageRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button>
+                                <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteWorker(worker.id)}>Delete</button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -1461,258 +1286,272 @@ function App() {
               </div>
             ) : (
               <div className="empty-state" style={{ marginTop: 16 }}>
-                No worker matches this search or site filter yet.
+                <div className="empty-state-icon">👷</div>
+                <h4>Koi worker nahi mila</h4>
+                <p>Search ya site filter change karein, ya upar se worker add karein.</p>
+              </div>
+            )}
+
+            {/* Workers Cards (mobile) */}
+            {visibleWorkers.length > 0 && (
+              <div className="workers-cards">
+                {visibleWorkers.map((worker) => {
+                  const ws = siteMap.get(worker.siteId);
+                  const isDeleting = deletingWorkerId === worker.id;
+                  return (
+                    <div className="worker-card" key={`wc-${worker.id}`}>
+                      <div className="worker-card-top">
+                        <div>
+                          <p className="worker-card-name">{worker.name}</p>
+                          <span className="worker-card-role">{worker.role || "No role"}</span>
+                        </div>
+                        <span className="worker-card-wage">{formatCurrency(worker.dailyWage)}/day</span>
+                      </div>
+                      <div className="worker-card-details">
+                        <span>Site: {ws?.name || "Unassigned"}</span>
+                        <span>Status: {worker.active ? "Active" : "Inactive"}</span>
+                        <span>UAN: {worker.uan || "—"}</span>
+                        <span>ESI: {worker.esiNumber || "—"}</span>
+                      </div>
+                      {isDeleting ? (
+                        <div className="worker-card-confirm" style={{ marginTop: 10 }}>
+                          <span>Delete karein?</span>
+                          <button className="btn-ghost btn-danger" type="button" style={{ padding: "8px 14px", fontSize: 13 }} onClick={() => handleDeleteWorker(worker.id)}>Haan</button>
+                          <button className="btn-ghost" type="button" style={{ padding: "8px 14px", fontSize: 13 }} onClick={() => setDeletingWorkerId("")}>Nahi</button>
+                        </div>
+                      ) : (
+                        <div className="worker-card-actions">
+                          <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(worker.id); setWorkerForm({ name: worker.name, role: worker.role, dailyWage: worker.dailyWage, uan: worker.uan, esiNumber: worker.esiNumber, siteId: worker.siteId, active: worker.active }); pageRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button>
+                          <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteWorker(worker.id)}>Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
+        {/* ── CSV Import (collapsed by default) ── */}
         <div className="surface panel">
-          <SectionHeader
-            title="Bulk Import From CSV"
-            sub="Use this once when you already have site and worker lists in Excel."
-            help="CSV import is still useful for very large onboarding. The quick add box above is better for day-to-day use."
-          />
-
-          <div className="import-templates">
-            <a
-              className="btn-ghost"
-              href="data:text/csv;charset=utf-8,Site Name,Client Name,Location%0ATema India,Tema India Pvt Ltd,Achhad Talasari"
-              download="sites_template.csv"
-            >
-              Download sites template
-            </a>
-            <a
-              className="btn-ghost"
-              href="data:text/csv;charset=utf-8,Name,Role,Daily Wage,UAN,ESI Number,Site Name%0ARamesh Patel,Fitter,650,100123456789,3112345678,Tema India"
-              download="workers_template.csv"
-            >
-              Download workers template
-            </a>
-          </div>
-
-          <div className="split import-grid">
-            <Field label="Sites CSV">
-              <input type="file" accept=".csv,text/csv" onChange={handleSitesFileChange} />
-            </Field>
-            <Field label="Workers CSV">
-              <input type="file" accept=".csv,text/csv" onChange={handleWorkersFileChange} />
-            </Field>
-          </div>
-
-          <div className="button-row" style={{ marginTop: 12 }}>
-            <button
-              className="btn-ghost"
-              type="button"
-              onClick={handlePreviewImport}
-              disabled={!importSitesText && !importWorkersText}
-            >
-              Preview import
-            </button>
-          </div>
-
-          {importPreview ? (
-            <div className="import-preview stack">
-              <p>
-                <strong>{importPreview.sites.length}</strong> sites and{" "}
-                <strong>{importPreview.workers.length}</strong> workers are ready to import.
-              </p>
-
-              {importPreview.sites.length ? (
-                <div className="mini-card">
-                  <h4>Sites</h4>
-                  {importPreview.sites.map((site, index) => (
-                    <p key={`${site.name}-${index}`}>
-                      {site.name} - {site.clientName || "No client"}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-
-              {importPreview.workers.length ? (
-                <div className="mini-card">
-                  <h4>Workers</h4>
-                  {importPreview.workers.slice(0, 10).map((worker, index) => (
-                    <p key={`${worker.name}-${index}`}>
-                      {worker.name} ({worker.role || "No role"}) - {worker.siteName || "Unassigned"} -
-                      {" "}{worker.dailyWage}/day
-                    </p>
-                  ))}
-                  {importPreview.workers.length > 10 ? (
-                    <p className="muted">
-                      ...and {importPreview.workers.length - 10} more workers
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="button-row">
-                <button className="btn" type="button" onClick={handleRunImport} disabled={importBusy}>
-                  {importBusy ? "Importing..." : "Confirm import"}
-                </button>
-                <button className="btn-ghost" type="button" onClick={() => setImportPreview(null)}>
-                  Cancel
-                </button>
-              </div>
+          <CollapsibleSection title="CSV se workers load karo (advanced)">
+            <div className="import-templates">
+              <a className="btn-ghost" href="data:text/csv;charset=utf-8,Site Name,Client Name,Location%0ATema India,Tema India Pvt Ltd,Achhad Talasari" download="sites_template.csv">Download sites template</a>
+              <a className="btn-ghost" href="data:text/csv;charset=utf-8,Name,Role,Daily Wage,UAN,ESI Number,Site Name%0ARamesh Patel,Fitter,650,100123456789,3112345678,Tema India" download="workers_template.csv">Download workers template</a>
             </div>
-          ) : null}
+            <div className="split import-grid">
+              <Field label="Sites CSV"><input type="file" accept=".csv,text/csv" onChange={handleSitesFileChange} /></Field>
+              <Field label="Workers CSV"><input type="file" accept=".csv,text/csv" onChange={handleWorkersFileChange} /></Field>
+            </div>
+            <div className="button-row" style={{ marginTop: 12 }}>
+              <button className="btn-ghost" type="button" onClick={handlePreviewImport} disabled={!importSitesText && !importWorkersText}>Preview import</button>
+            </div>
+            {importPreview ? (
+              <div className="import-preview stack">
+                <p><strong>{importPreview.sites.length}</strong> sites aur <strong>{importPreview.workers.length}</strong> workers import ke liye ready hain.</p>
+                {importPreview.workers.length ? (
+                  <div className="mini-card">
+                    <h4>Workers</h4>
+                    {importPreview.workers.slice(0, 10).map((w, i) => (
+                      <p key={`${w.name}-${i}`}>{w.name} ({w.role || "No role"}) — {w.siteName || "Unassigned"} — {w.dailyWage}/day</p>
+                    ))}
+                    {importPreview.workers.length > 10 ? <p className="muted">...aur {importPreview.workers.length - 10} workers</p> : null}
+                  </div>
+                ) : null}
+                <div className="button-row">
+                  <button className="btn" type="button" onClick={handleRunImport} disabled={importBusy}>{importBusy ? "Importing..." : "Confirm import"}</button>
+                  <button className="btn-ghost" type="button" onClick={() => setImportPreview(null)}>Cancel</button>
+                </div>
+              </div>
+            ) : null}
+          </CollapsibleSection>
         </div>
       </div>
     );
   }
 
   function renderAttendance() {
+    const suggestions = CHAT_SUGGESTIONS.attendance;
+
     return (
       <div className="stack">
-        <div className="surface panel">
-          <SectionHeader
-            eyebrow="Daily attendance first"
-            title="Today Board"
-            sub="This is the fastest daily flow. Touch any status card to cycle through P, A, HD, OT, and WO for today only."
-            help="Past dates stay locked in normal mode. Use the correction switch below only when you must fix an older entry."
-            actions={
-              <div className="hero-tags">
-                <span className="status-pill">Today is day {todayDay}</span>
-                <span className="status-pill">{todaySummary.P} present</span>
-                <span className="status-pill">{todaySummary.OT} OT</span>
-              </div>
-            }
-          />
-
-          <div className="attendance-toolbar">
-            <Field label="Find Worker" full>
-              <input
-                value={attendanceSearch}
-                onChange={(event) => setAttendanceSearch(event.target.value)}
-                placeholder="Search by worker, role, or site"
-              />
-            </Field>
+        {/* View Toggle */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div className="attendance-view-tabs">
+            <button className={`attendance-view-tab${attendanceView === "today" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("today")}>
+              ✔ Aaj ki haziri
+            </button>
+            <button className={`attendance-view-tab${attendanceView === "month" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("month")}>
+              📅 Poora mahina
+            </button>
           </div>
+          <div className="hero-tags">
+            <span className="status-pill">Day {todayDay}</span>
+            <span className="status-pill">{todaySummary.P} present</span>
+            <span className="status-pill">{todaySummary.OT} OT</span>
+          </div>
+        </div>
 
-          <div className="legend-row">
-            {ATTENDANCE_CYCLE.map((status) => (
-              <span key={status} className={`legend-chip status-${status}`}>
-                {status} - {STATUS_LABELS[status]}
+        {/* TODAY BOARD */}
+        {attendanceView === "today" && (
+          <div className="surface panel">
+            <SectionHeader
+              eyebrow="Daily attendance first"
+              title="Aaj ki haziri"
+              sub="Har worker ka status tap karke change karein — P, A, HD, OT, ya WO."
+              help="Past dates locked hain normal mode mein. Purani dates ke liye correction mode use karein."
+            />
+
+            {/* Summary Bar */}
+            <div className="att-summary-bar">
+              {["P", "A", "HD", "OT", "WO"].map((s) => (
+                <span key={s} className={`att-chip att-chip-${s}`}>
+                  {s}: {todaySummary[s] || 0}
+                </span>
+              ))}
+              <span className="att-chip" style={{ background: "rgba(74,101,88,0.06)", border: "1px solid var(--line)", color: "var(--muted)" }}>
+                Total: {attendanceRows.length}
               </span>
-            ))}
-          </div>
+            </div>
 
-          {attendanceRows.length ? (
-            <div className="today-board">
-              {attendanceRows.map((row) => (
-                <div className="today-card surface" key={`today-${row.id}`}>
-                  <div className="today-card-copy">
-                    <h4>{row.name}</h4>
-                    <p>
-                      {row.role || "No role"} and {row.siteName}
-                    </p>
-                  </div>
-                  <button
-                    className={`today-status-btn status-${row.attendance[todayDayKey]}`}
-                    type="button"
-                    onClick={() => handleToggleAttendance(row.id, todayDayKey)}
-                  >
-                    <span>{row.attendance[todayDayKey]}</span>
-                    <small>{STATUS_LABELS[row.attendance[todayDayKey]]}</small>
-                  </button>
+            {/* Mark All Present */}
+            <div className="mark-all-bar">
+              <span>Sabko present mark karein — ek tap mein!</span>
+              {markAllConfirming ? (
+                <div className="mark-all-confirm-inline">
+                  <span>{attendanceRows.length} workers ko present mark karein?</span>
+                  <button className="btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleMarkAllPresent}>Haan, karo</button>
+                  <button className="btn-ghost" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={() => setMarkAllConfirming(false)}>Nahi</button>
                 </div>
+              ) : (
+                <button className="btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={() => setMarkAllConfirming(true)}>
+                  Sabko Present ✔
+                </button>
+              )}
+            </div>
+
+            {/* Search */}
+            <div className="attendance-toolbar">
+              <Field label="Worker dhundo" full>
+                <input value={attendanceSearch} onChange={(e) => setAttendanceSearch(e.target.value)} placeholder="Naam, role, ya site..." />
+              </Field>
+            </div>
+
+            {/* Legend */}
+            <div className="legend-row">
+              {ATTENDANCE_CYCLE.map((s) => (
+                <span key={s} className={`legend-chip status-${s}`}>{s} — {STATUS_HINDI[s]}</span>
               ))}
             </div>
-          ) : (
-            <div className="empty-state" style={{ marginTop: 16 }}>
-              No worker matches the current search or site filter.
-            </div>
-          )}
-        </div>
 
-        <div className="surface panel">
-          <SectionHeader
-            title="Month Register"
-            sub={
-              correctionMode
-                ? "Correction mode is ON. Past dates in the current month can be edited. Future dates still stay locked."
-                : "Only today's date is editable in normal mode. Past dates are visible but locked."
-            }
-            help="This full register stays visible for review, but safe editing is restricted so old entries are not changed by mistake."
-            actions={
-              <div className="button-row">
-                <button
-                  className={`btn-ghost${correctionMode ? " active-toggle" : ""}`}
-                  type="button"
-                  onClick={() => setCorrectionMode((current) => !current)}
-                >
-                  {correctionMode ? "Close correction mode" : "Enable past-date correction"}
-                </button>
-              </div>
-            }
-          />
-
-          <div
-            className="table-wrap keyboard-scroll"
-            tabIndex={0}
-            onKeyDown={handleScrollableKeyDown}
-            style={{ marginTop: 16 }}
-          >
-            <table className="attendance-table">
-              <thead>
-                <tr>
-                  <th>Worker</th>
-                  <th>Site</th>
-                  {allDays.map((day) => (
-                    <th
-                      className={`attendance-cell${Number(day) === todayDay ? " attendance-col-today" : ""}`}
-                      key={day}
-                    >
-                      {day}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {attendanceRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <div>{row.name}</div>
-                      <div className="muted table-subtext">{row.role || "No role"}</div>
-                    </td>
-                    <td>{row.siteName}</td>
-                    {allDays.map((day) => {
-                      const editable = isAttendanceEditable(day);
-                      const future = isFutureDay(day);
-                      const displayStatus = future ? "--" : row.attendance[day];
-                      return (
-                        <td
-                          className={`attendance-cell${Number(day) === todayDay ? " attendance-col-today" : ""}`}
-                          key={`${row.id}-${day}`}
-                        >
-                          <button
-                            className={`attendance-chip status-${displayStatus}${editable ? "" : " locked"}${future ? " future" : ""}`}
-                            onClick={() =>
-                              handleToggleAttendance(row.id, day, {
-                                overridePastEdit: correctionMode && isPastDay(day),
-                              })
-                            }
-                            type="button"
-                            disabled={!editable}
-                            title={
-                              future
-                                ? "Future date"
-                                : editable
-                                  ? STATUS_LABELS[displayStatus]
-                                  : "Locked. Enable correction mode for older dates."
-                            }
-                          >
-                            {displayStatus}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
+            {/* Today Cards grouped by site */}
+            {attendanceRows.length ? (
+              <div style={{ marginTop: 16 }}>
+                {siteGroups.map((group) => (
+                  <div key={group.siteKey}>
+                    <div className="site-group-header">
+                      <span className="site-group-title">{group.siteName}</span>
+                      <span className="site-group-count">{group.rows.length} workers</span>
+                    </div>
+                    <div className="today-board">
+                      {group.rows.map((row) => {
+                        const cellKey = `${row.id}-${todayDayKey}`;
+                        const isSaving = savingCells.has(cellKey);
+                        const isSaved = savedCells.has(cellKey);
+                        const status = row.attendance[todayDayKey] || "A";
+                        return (
+                          <div className="today-card surface" key={`today-${row.id}`}>
+                            {isSaving && <span className="save-dot saving" title="Saving..." />}
+                            {!isSaving && isSaved && <span className="save-dot saved" title="Saved!" />}
+                            <div className="today-card-copy">
+                              <h4>{row.name}</h4>
+                              <p>{row.role || "No role"}</p>
+                            </div>
+                            <button
+                              className={`today-status-btn status-${status}`}
+                              type="button"
+                              onClick={() => handleToggleAttendance(row.id, todayDayKey)}
+                            >
+                              <span>{status}</span>
+                              <small className="status-label-hindi">{STATUS_HINDI[status]}</small>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ) : (
+              <div className="empty-state" style={{ marginTop: 16 }}>
+                <div className="empty-state-icon">👷</div>
+                <h4>Koi worker nahi mila</h4>
+                <p>Search ya site filter change karein. Ya Setup mein jaake workers add karein.</p>
+              </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {/* MONTH REGISTER */}
+        {attendanceView === "month" && (
+          <div className="surface panel">
+            <SectionHeader
+              title="Month Register"
+              sub={correctionMode ? "Correction mode ON hai. Purani dates edit ho sakti hain. Future dates locked rehenge." : "Sirf aaj ki date editable hai. Purani dates locked hain."}
+              help="Full register review ke liye visible hai. Safe editing restricted hai taaki galti se purani entries change na hoon."
+              actions={
+                <div className="button-row">
+                  <button className={`btn-ghost${correctionMode ? " active-toggle" : ""}`} type="button" onClick={() => setCorrectionMode((c) => !c)}>
+                    {correctionMode ? "Close correction mode" : "Enable past-date correction"}
+                  </button>
+                </div>
+              }
+            />
+            <div className="table-wrap keyboard-scroll" tabIndex={0} onKeyDown={handleScrollableKeyDown} style={{ marginTop: 16 }}>
+              <table className="attendance-table">
+                <thead>
+                  <tr>
+                    <th>Worker</th>
+                    <th>Site</th>
+                    {allDays.map((day) => (
+                      <th className={`attendance-cell${Number(day) === todayDay ? " attendance-col-today" : ""}`} key={day}>{day}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <div>{row.name}</div>
+                        <div className="muted table-subtext">{row.role || "No role"}</div>
+                      </td>
+                      <td>{row.siteName}</td>
+                      {allDays.map((day) => {
+                        const editable = isAttendanceEditable(day);
+                        const future = isFutureDay(day);
+                        const displayStatus = future ? "--" : row.attendance[day];
+                        return (
+                          <td className={`attendance-cell${Number(day) === todayDay ? " attendance-col-today" : ""}`} key={`${row.id}-${day}`}>
+                            <button
+                              className={`attendance-chip status-${displayStatus}${editable ? "" : " locked"}${future ? " future" : ""}`}
+                              onClick={() => handleToggleAttendance(row.id, day, { overridePastEdit: correctionMode && isPastDay(day) })}
+                              type="button"
+                              disabled={!editable}
+                              title={future ? "Future date" : editable ? STATUS_LABELS[displayStatus] : "Locked. Correction mode enable karein."}
+                            >
+                              {displayStatus}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1723,65 +1562,118 @@ function App() {
         <SectionHeader
           eyebrow="Month-to-date payroll"
           title="Payroll Breakdown"
-          sub="This report is locked to the current month and excludes future dates until they arrive."
+          sub="Current month only. Future dates excluded."
           help={TAB_HELP.payroll}
           actions={<div className="status-pill">{monthTitle}</div>}
         />
 
-        {monthModel.rows.length ? (
-          <div
-            className="table-wrap keyboard-scroll"
-            tabIndex={0}
-            onKeyDown={handleScrollableKeyDown}
-            style={{ marginTop: 16 }}
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th>Worker</th>
-                  <th>Site</th>
-                  <th>Present</th>
-                  <th>Absent</th>
-                  <th>HD</th>
-                  <th>OT</th>
-                  <th>Basic</th>
-                  <th>Gross</th>
-                  <th>PF</th>
-                  <th>ESI</th>
-                  <th>Net</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthModel.rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <div>{row.name}</div>
-                      <div className="muted table-subtext">{formatCurrency(row.dailyWage)}/day</div>
-                    </td>
-                    <td>{row.siteName}</td>
-                    <td>{row.payroll.present}</td>
-                    <td>{row.payroll.absent}</td>
-                    <td>{row.payroll.halfDay}</td>
-                    <td>{row.payroll.overtimeDays}</td>
-                    <td className="mono">{formatCurrency(row.payroll.basic)}</td>
-                    <td className="mono">{formatCurrency(row.payroll.gross)}</td>
-                    <td className="mono">-{formatCurrency(row.payroll.pfEmployee)}</td>
-                    <td className="mono">-{formatCurrency(row.payroll.esiEmployee)}</td>
-                    <td className="mono">{formatCurrency(row.payroll.net)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Totals Summary */}
+        {monthModel.rows.length > 0 && (
+          <div className="payroll-totals">
+            <div className="payroll-total-card">
+              <p className="pt-label">Total Workers</p>
+              <p className="pt-value">{monthModel.rows.length}</p>
+            </div>
+            <div className="payroll-total-card">
+              <p className="pt-label">Total Gross</p>
+              <p className="pt-value mono">{formatCurrency(monthModel.totals.gross)}</p>
+            </div>
+            <div className="payroll-total-card">
+              <p className="pt-label">Total Net Payable</p>
+              <p className="pt-value mono" style={{ color: "var(--accent-strong)" }}>{formatCurrency(monthModel.totals.net)}</p>
+            </div>
           </div>
+        )}
+
+        {/* Search */}
+        <div style={{ marginBottom: 12 }}>
+          <Field label="Worker dhundo" full>
+            <input value={payrollSearch} onChange={(e) => setPayrollSearch(e.target.value)} placeholder="Naam, role, ya site..." />
+          </Field>
+        </div>
+
+        {payrollRows.length ? (
+          <>
+            {/* Desktop Table */}
+            <div className="table-wrap keyboard-scroll payroll-table-wrap" tabIndex={0} onKeyDown={handleScrollableKeyDown} style={{ marginTop: 4 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Worker</th>
+                    <th>Site</th>
+                    <th>Present</th>
+                    <th>Absent</th>
+                    <th>HD</th>
+                    <th>OT</th>
+                    <th>Basic</th>
+                    <th>Gross</th>
+                    <th>PF</th>
+                    <th>ESI</th>
+                    <th>Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payrollRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <div>{row.name}</div>
+                        <div className="muted table-subtext">{formatCurrency(row.dailyWage)}/day</div>
+                      </td>
+                      <td>{row.siteName}</td>
+                      <td>{row.payroll.present}</td>
+                      <td>{row.payroll.absent}</td>
+                      <td>{row.payroll.halfDay}</td>
+                      <td>{row.payroll.overtimeDays}</td>
+                      <td className="mono">{formatCurrency(row.payroll.basic)}</td>
+                      <td className="mono">{formatCurrency(row.payroll.gross)}</td>
+                      <td className="mono" style={{ color: "var(--danger)" }}>-{formatCurrency(row.payroll.pfEmployee)}</td>
+                      <td className="mono" style={{ color: "var(--danger)" }}>-{formatCurrency(row.payroll.esiEmployee)}</td>
+                      <td className="mono" style={{ fontWeight: 700, color: "var(--accent-strong)" }}>{formatCurrency(row.payroll.net)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="payroll-cards">
+              {payrollRows.map((row) => (
+                <div className="payroll-card" key={`pc-${row.id}`}>
+                  <div className="payroll-card-header">
+                    <div>
+                      <p className="payroll-card-name">{row.name}</p>
+                      <p className="payroll-card-site">{row.siteName}</p>
+                    </div>
+                    <div className="payroll-card-wage">{row.role}<br />{formatCurrency(row.dailyWage)}/day</div>
+                  </div>
+                  <div className="payroll-card-grid">
+                    <span className="p-label">Present</span><span className="p-value">{row.payroll.present} days</span>
+                    <span className="p-label">Absent</span><span className="p-value">{row.payroll.absent} days</span>
+                    <span className="p-label">Half day</span><span className="p-value">{row.payroll.halfDay}</span>
+                    <span className="p-label">OT</span><span className="p-value">{row.payroll.overtimeDays}</span>
+                    <span className="p-label">Gross</span><span className="p-value">{formatCurrency(row.payroll.gross)}</span>
+                    <span className="p-label">PF</span><span className="p-deduction">-{formatCurrency(row.payroll.pfEmployee)}</span>
+                    <span className="p-label">ESI</span><span className="p-deduction">-{formatCurrency(row.payroll.esiEmployee)}</span>
+                  </div>
+                  <div className="payroll-card-net">
+                    <span className="payroll-card-net-label">NET</span>
+                    <span className="payroll-card-net-value">{formatCurrency(row.payroll.net)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <div className="empty-state" style={{ marginTop: 16 }}>
-            No worker is available for this site filter.
+            <div className="empty-state-icon">💰</div>
+            <h4>Koi worker nahi mila</h4>
+            <p>Site filter ya search change karein.</p>
           </div>
         )}
 
         <div className="button-row" style={{ marginTop: 16 }}>
-          <button className="btn-ghost" type="button" onClick={() => downloadWages(month)}>
-            Download Excel
+          <button className="btn-download" type="button" onClick={() => { downloadWages(month); showToast("Excel download shuru ho gaya!", "success"); }}>
+            ⬇ Excel Download karo
           </button>
         </div>
       </div>
@@ -1790,81 +1682,116 @@ function App() {
 
   function renderInvoice() {
     return (
-      <div className="split">
-        <div className="surface panel">
-          <SectionHeader
-            eyebrow="Live billing snapshot"
-            title="Invoice Summary"
-            sub="These values move with attendance, worker count, and company rules during the current month."
-            help={TAB_HELP.invoice}
-          />
-          <div className="stack">
-            <div className="mini-card">
-              <h4>{company.businessName || "Business name pending"}</h4>
-              <p>{company.address || "Add the company address in Setup."}</p>
-              <p style={{ marginTop: 10 }}>
-                Client: {selectedSite?.clientName || "All active clients"}
-              </p>
+      <div className="stack">
+        {/* Registration warnings */}
+        {missingRegs.length > 0 && (
+          <div className="reg-warning">
+            <div className="reg-warning-text">
+              <strong>⚠ Registration missing hai</strong>
+              {missingRegs.join(", ")} set nahi hai. Invoice mein blank aayega.
             </div>
-            <div className="mini-card">
-              <h4>Line Items</h4>
-              <p>Gross wages: {formatCurrency(monthModel.totals.gross)}</p>
-              <p>Employer PF: {formatCurrency(monthModel.totals.pfEmployer)}</p>
-              <p>Employer ESI: {formatCurrency(monthModel.totals.esiEmployer)}</p>
-              <p>
-                Service charge ({monthModel.rules.serviceChargeRate}%):{" "}
-                {formatCurrency(monthModel.totals.serviceCharge)}
-              </p>
-              <p>Sub-total: {formatCurrency(monthModel.totals.subTotal)}</p>
-              <p>GST ({monthModel.rules.gstRate}%): {formatCurrency(monthModel.totals.gstAmount)}</p>
-            </div>
+            <button className="btn-ghost" type="button" onClick={() => setTab("setup")} style={{ fontSize: 13, padding: "8px 14px" }}>
+              Setup kholein →
+            </button>
           </div>
-        </div>
+        )}
 
-        <div className="surface panel">
-          <SectionHeader
-            title="Total Payable"
-            sub="This is the current month invoice estimate for the selected site scope."
-            help="Use the site filter in the page header when you want one client instead of all active sites."
-            actions={<div className="status-pill">{monthTitle}</div>}
-          />
-
-          <p className="metric-value" style={{ marginTop: 12 }}>
-            {formatCurrency(monthModel.totals.invoiceTotal)}
-          </p>
-          <p className="muted">Driven by active workers, month-to-date attendance, and the rules saved in Setup.</p>
-
-          <div className="stack" style={{ marginTop: 18 }}>
-            <div className="mini-card">
-              <h4>Registrations To Print</h4>
-              <p>GSTIN: {company.gstin || "Not set"}</p>
-              <p>PF: {company.pfRegistration || "Not set"}</p>
-              <p>ESI: {company.esiRegistration || "Not set"}</p>
-              <p>CLRA: {company.clraLicense || "Not set"}</p>
+        {/* Professional Invoice Document */}
+        <div className="invoice-doc surface">
+          {/* Header */}
+          <div className="invoice-doc-header">
+            <div className="invoice-doc-brand">
+              <div className="invoice-doc-brand-badge">TK</div>
+              <div className="invoice-doc-brand-info">
+                <h3>{company.businessName || "Business Name Pending"}</h3>
+                <p>{company.address || "Address not set"}</p>
+                {company.ownerName && <p>{company.ownerName}</p>}
+              </div>
             </div>
-            <div className="mini-card">
-              <h4>Scope</h4>
-              <p>{monthTitle}</p>
-              <p>{monthModel.rows.length} workers in view</p>
-              <p>{selectedSite ? `Filtered to ${selectedSite.name}` : "All sites included"}</p>
+            <div className="invoice-doc-meta">
+              <div className="inv-num">{invoiceNumber}</div>
+              <div className="inv-date">{monthTitle}</div>
+              {company.phone && <div className="inv-date">{company.phone}</div>}
             </div>
           </div>
 
-          <div className="button-row" style={{ marginTop: 16 }}>
-            <button className="btn" type="button" onClick={() => downloadInvoice(month, siteFilter)}>
-              Download PDF
+          {/* From / To */}
+          <div className="invoice-from-to">
+            <div className="invoice-party-box">
+              <h5>From</h5>
+              <p><strong>{company.businessName || "Your business"}</strong></p>
+              <p>{company.address || "—"}</p>
+            </div>
+            <div className="invoice-party-box">
+              <h5>To</h5>
+              <p><strong>{selectedSite?.clientName || "All active clients"}</strong></p>
+              <p>{selectedSite?.name || "All sites"}</p>
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <table className="invoice-line-items">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th className="amount">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Gross Wages ({monthModel.rows.length} workers, {monthTitle})</td>
+                <td className="amount">{formatCurrency(monthModel.totals.gross)}</td>
+              </tr>
+              <tr>
+                <td>Employer PF Contribution</td>
+                <td className="amount">{formatCurrency(monthModel.totals.pfEmployer)}</td>
+              </tr>
+              <tr>
+                <td>Employer ESI Contribution</td>
+                <td className="amount">{formatCurrency(monthModel.totals.esiEmployer)}</td>
+              </tr>
+              <tr>
+                <td>Service Charge ({monthModel.rules.serviceChargeRate}%)</td>
+                <td className="amount">{formatCurrency(monthModel.totals.serviceCharge)}</td>
+              </tr>
+              <tr className="invoice-subtotal-row">
+                <td>Sub-Total</td>
+                <td className="amount">{formatCurrency(monthModel.totals.subTotal)}</td>
+              </tr>
+              <tr>
+                <td>GST ({monthModel.rules.gstRate}%)</td>
+                <td className="amount">{formatCurrency(monthModel.totals.gstAmount)}</td>
+              </tr>
+              <tr className="invoice-total-row">
+                <td className="desc-col">TOTAL PAYABLE</td>
+                <td className="amount">{formatCurrency(monthModel.totals.invoiceTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Registrations Footer */}
+          <div className="invoice-footer">
+            {company.gstin && <span className="invoice-reg-item">GSTIN: {company.gstin}</span>}
+            {company.pfRegistration && <span className="invoice-reg-item">PF: {company.pfRegistration}</span>}
+            {company.esiRegistration && <span className="invoice-reg-item">ESI: {company.esiRegistration}</span>}
+            {company.clraLicense && <span className="invoice-reg-item">CLRA: {company.clraLicense}</span>}
+            <span className="invoice-reg-item">Scope: {monthModel.rows.length} workers</span>
+          </div>
+
+          {/* Actions */}
+          <div className="invoice-actions">
+            <button className="btn" type="button" onClick={() => { downloadInvoice(month, siteFilter); showToast("PDF download shuru ho gaya!", "success"); }}>
+              ⬇ PDF Download karo
             </button>
             <button
-              className="btn-ghost"
+              className="btn-whatsapp"
               type="button"
               onClick={() => {
-                const message = encodeURIComponent(
-                  `${company.businessName || "Thekedar AI"} invoice for ${monthTitle}: Total Rs.${monthModel.totals.invoiceTotal.toLocaleString("en-IN")}`,
-                );
-                window.open(`https://wa.me/?text=${message}`, "_blank");
+                const msg = encodeURIComponent(`${company.businessName || "Thekedar AI"} — ${monthTitle} Invoice\nTotal: ${formatCurrency(monthModel.totals.invoiceTotal)}\nRef: ${invoiceNumber}`);
+                window.open(`https://wa.me/?text=${msg}`, "_blank");
               }}
             >
-              WhatsApp share
+              📲 WhatsApp pe bhejo
             </button>
           </div>
         </div>
@@ -1873,76 +1800,72 @@ function App() {
   }
 
   function renderChat() {
-    return (
-      <div className="split">
-        <div className="surface panel">
-          <SectionHeader
-            title="Operations Assistant"
-            sub="Ask in Hindi or English about attendance, payroll, invoice totals, or worker planning."
-            help={TAB_HELP.chat}
-          />
+    const suggestions = CHAT_SUGGESTIONS.default;
+    const lastMsg = chatMessages[chatMessages.length - 1];
 
-          <div
-            className="chat-stack keyboard-scroll"
-            tabIndex={0}
-            onKeyDown={handleScrollableKeyDown}
-          >
+    return (
+      <div className="chat-layout">
+        {/* Chat Main Panel */}
+        <div className="surface panel">
+          <SectionHeader title="AI Assistant" sub="Hindi ya English mein pucho — attendance, payroll, ya invoice." help={TAB_HELP.chat} />
+
+          {/* Bubbles */}
+          <div className="chat-stack-bubbles keyboard-scroll" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
             {chatMessages.map((message, index) => (
-              <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
-                <small>{message.role === "assistant" ? "Assistant" : "You"}</small>
-                <p>{message.content}</p>
+              <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
+                <div className="chat-bubble-body">
+                  {message.content}
+                </div>
+                {message.timestamp && (
+                  <div className="chat-bubble-time">
+                    {message.role === "user" ? "You" : "AI"} · {formatTime(message.timestamp)}
+                  </div>
+                )}
               </div>
             ))}
             {chatLoading ? (
-              <div className="chat-message assistant">
-                <small>Assistant</small>
-                <p className="typing-dots">
-                  <span />
-                  <span />
-                  <span />
-                </p>
+              <div className="chat-bubble assistant">
+                <div className="chat-bubble-body">
+                  <p className="typing-dots"><span /><span /><span /></p>
+                </div>
               </div>
             ) : null}
             <div ref={chatEndRef} />
           </div>
 
-          {!chatLoading && chatMessages[chatMessages.length - 1]?.role === "assistant" ? (
+          {/* Quick Suggestion Chips */}
+          {!chatLoading && lastMsg?.role === "assistant" && (
             <div className="chat-chips">
-              {["Aaj kitne log aaye?", "Payroll batao", "Invoice total kya hai?"].map((chip) => (
-                <button
-                  key={chip}
-                  className="chat-chip"
-                  type="button"
-                  onClick={() => setChatInput(chip)}
-                >
-                  {chip}
-                </button>
+              {suggestions.slice(0, 4).map((chip) => (
+                <button key={chip} className="chat-chip" type="button" onClick={() => setChatInput(chip)}>{chip}</button>
               ))}
             </div>
-          ) : null}
+          )}
 
-          <form className="stack" onSubmit={handleSendChat} style={{ marginTop: 16 }}>
-            <Field label="Ask Anything" full>
+          {/* Input Row */}
+          <form onSubmit={handleSendChat}>
+            <div className="chat-input-row">
               <textarea
+                className="chat-input-field"
                 value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                placeholder="Aaj kitne log aaye? Rajesh ki tankhwah kitni bani? Invoice total batao."
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendChat(null); } }}
+                placeholder="Kuch bhi pucho — Hindi ya English mein..."
+                rows={1}
               />
-            </Field>
-            <div className="button-row">
-              <button className="btn" type="submit" disabled={chatLoading}>
-                Send
+              <button className="chat-voice-btn" type="button" title="Voice input — jaldi aayega!" onClick={() => showToast("Voice input jaldi aayega!", "info")} aria-label="Voice input">
+                🎤
+              </button>
+              <button className="chat-send-btn" type="submit" disabled={chatLoading} aria-label="Send message">
+                ▶
               </button>
             </div>
           </form>
         </div>
 
-        <div className="surface panel">
-          <SectionHeader
-            title="Chat Context"
-            sub="This is the data scope sent to the assistant."
-            help="If a reply looks wrong, first check the selected site filter and whether today attendance is updated."
-          />
+        {/* Context Panel (desktop only) */}
+        <div className="surface panel chat-context-panel">
+          <SectionHeader title="Chat Context" sub="Yeh data AI ko diya jaata hai." help="Agar reply galat lage toh site filter aur aaj ki haziri check karein." />
           <div className="stack">
             <div className="mini-card">
               <h4>Scope</h4>
@@ -1951,11 +1874,17 @@ function App() {
               <p>Workers in context: {monthModel.rows.length}</p>
             </div>
             <div className="mini-card">
-              <h4>Assistant Can Use</h4>
-              <p>Company profile and rules</p>
-              <p>Sites and workers</p>
-              <p>Attendance summaries and payroll totals</p>
-              <p>Invoice totals for the current filter</p>
+              <h4>AI Can Answer About</h4>
+              <p>Company profile aur rates</p>
+              <p>Sites aur workers</p>
+              <p>Attendance summaries aur payroll</p>
+              <p>Invoice totals</p>
+            </div>
+            <div className="mini-card">
+              <h4>Quick Suggestions</h4>
+              {CHAT_SUGGESTIONS.default.map((s) => (
+                <button key={s} className="chat-chip" type="button" style={{ marginTop: 6, width: "100%", textAlign: "left", borderRadius: 10 }} onClick={() => setChatInput(s)}>{s}</button>
+              ))}
             </div>
             <div className="mini-card">
               <h4>Required Env</h4>
@@ -1977,18 +1906,22 @@ function App() {
     return renderDashboard();
   }
 
+  /* ── Not authenticated ───────────────────────── */
   if (!authenticated) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
+  /* ── Main App Shell ───────────────────────────── */
   return (
     <div className="app-shell">
+      {/* ── Sidebar ── */}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-badge">TK</div>
-          <div>
+          <div className="brand-text">
             <h1>Thekedar AI</h1>
             <p>{company.businessName || "Your business"}</p>
+            {company.ownerName && <p className="brand-owner">{company.ownerName}</p>}
           </div>
         </div>
 
@@ -1997,77 +1930,69 @@ function App() {
             <button
               className={`nav-button${tab === item.id ? " active" : ""}`}
               key={item.id}
-              onClick={() => {
-                setTab(item.id);
-                setMoreOpen(false);
-              }}
+              onClick={() => { setTab(item.id); setMoreOpen(false); }}
               type="button"
             >
-              <span className="mono">{item.icon}</span>
+              <span className="nav-button-icon">{item.icon}</span>
               <span>{item.label}</span>
             </button>
           ))}
         </div>
 
         <div className="sidebar-note">
-          <strong>Daily recommended flow</strong>
-          <p>1. Open Attendance and mark today.</p>
-          <p>2. Check Dashboard or Payroll.</p>
-          <p>3. Use correction mode only for older dates.</p>
+          <strong>Roz ka kaam</strong>
+          <p>1. Haziri lagao (Attendance)</p>
+          <p>2. Payroll check karo</p>
+          <p>3. Invoice download karo</p>
         </div>
 
         <div className="sidebar-footer">
-          <button className="btn-ghost logout-btn" type="button" onClick={handleLogout}>
-            Sign out
-          </button>
+          {logoutConfirming ? (
+            <div className="logout-confirm-row">
+              <span className="logout-confirm-text">Sign out karein?</span>
+              <div className="logout-confirm-btns">
+                <button className="btn-danger-solid" type="button" onClick={handleLogout}>Haan</button>
+                <button className="btn-ghost" type="button" onClick={() => setLogoutConfirming(false)}>Nahi</button>
+              </div>
+            </div>
+          ) : (
+            <button className="btn-ghost logout-btn" type="button" onClick={() => setLogoutConfirming(true)}>
+              Sign out
+            </button>
+          )}
         </div>
       </aside>
 
-      <main
-        className="main keyboard-scroll"
-        ref={pageRef}
-        tabIndex={0}
-        onKeyDown={handleScrollableKeyDown}
-      >
+      {/* ── Main Content ── */}
+      <main className="main keyboard-scroll" ref={pageRef} tabIndex={0} onKeyDown={handleScrollableKeyDown}>
         <div className="page-header surface">
           <div className="page-header-copy">
-            <p className="eyebrow">Current month only</p>
-            <h2>{NAV_ITEMS.find((item) => item.id === tab)?.label || "Dashboard"}</h2>
-            <p>
-              {company.businessName || "Configure your business in Setup"} and use {monthTitle} as
-              the live working month.
-            </p>
+            <div className="page-header-eyebrow">
+              <p className="eyebrow">Current month only</p>
+              <span className="month-lock-inline">{monthTitle}</span>
+            </div>
+            <h2>{NAV_ITEMS.find((i) => i.id === tab)?.label || "Dashboard"}</h2>
+            <p>{company.businessName || "Configure your business in Setup"}</p>
           </div>
 
           <div className="toolbar">
-            <div className="month-lock">
-              <span className="field-hint">Month locked</span>
-              <strong>{monthTitle}</strong>
-            </div>
-
-            <div className="pill-row keyboard-scroll" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
-              <button
-                className={`pill${siteFilter === "all" ? " active" : ""}`}
-                onClick={() => setSiteFilter("all")}
-                type="button"
-              >
-                All sites
-              </button>
+            {/* Desktop site filter pills */}
+            <div className="pill-row keyboard-scroll site-filter-desktop" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
+              <button className={`pill${siteFilter === "all" ? " active" : ""}`} onClick={() => setSiteFilter("all")} type="button">All sites</button>
               {sites.map((site) => (
-                <button
-                  className={`pill${siteFilter === site.id ? " active" : ""}`}
-                  key={site.id}
-                  onClick={() => setSiteFilter(site.id)}
-                  type="button"
-                >
-                  {site.name}
-                </button>
+                <button className={`pill${siteFilter === site.id ? " active" : ""}`} key={site.id} onClick={() => setSiteFilter(site.id)} type="button">{site.name}</button>
               ))}
             </div>
 
-            <button className="btn-ghost" onClick={() => loadBootstrap(month)} type="button">
-              Reload
-            </button>
+            {/* Mobile site filter dropdown */}
+            <div className="site-filter-mobile">
+              <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+                <option value="all">All sites</option>
+                {sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
+              </select>
+            </div>
+
+            <button className="btn-ghost" onClick={() => loadBootstrap(month)} type="button" aria-label="Reload data">↺ Reload</button>
             <HelpHint text={TAB_HELP[tab]} />
           </div>
         </div>
@@ -2087,60 +2012,57 @@ function App() {
         )}
       </main>
 
-      <nav className="bottom-nav">
+      {/* ── Bottom Nav ── */}
+      <nav className="bottom-nav" aria-label="Main navigation">
         {MOBILE_NAV_ITEMS.map((item) => (
           <button
             key={item.id}
             className={`bottom-tab${tab === item.id ? " active" : ""}`}
-            onClick={() => {
-              setTab(item.id);
-              setMoreOpen(false);
-            }}
+            onClick={() => { setTab(item.id); setMoreOpen(false); }}
             type="button"
+            aria-label={item.label}
           >
             <span className="tab-icon">{item.icon}</span>
             <span className="tab-label">{item.label}</span>
+            {tab === item.id && <span className="tab-active-dot" />}
           </button>
         ))}
         <button
           className={`bottom-tab${moreOpen ? " active" : ""}`}
-          onClick={() => setMoreOpen((current) => !current)}
+          onClick={() => setMoreOpen((c) => !c)}
           type="button"
+          aria-label="More options"
         >
-          <span className="tab-icon">...</span>
+          <span className="tab-icon">⋯</span>
           <span className="tab-label">More</span>
         </button>
       </nav>
 
+      {/* ── More Sheet ── */}
       {moreOpen ? (
         <div className="more-sheet" onClick={() => setMoreOpen(false)}>
-          <div className="more-sheet-content" onClick={(event) => event.stopPropagation()}>
-            <button
-              className="more-item"
-              onClick={() => {
-                setTab("invoice");
-                setMoreOpen(false);
-              }}
-              type="button"
-            >
-              Invoice
+          <div className="more-sheet-content" onClick={(e) => e.stopPropagation()}>
+            <div className="more-sheet-handle" />
+            <div className="more-sheet-business">
+              {company.businessName || "Thekedar AI"}
+              {company.ownerName && <span>{company.ownerName}</span>}
+            </div>
+            <button className="more-item" onClick={() => { setTab("invoice"); setMoreOpen(false); }} type="button">
+              <span className="more-item-icon">≡</span> Invoice
             </button>
-            <button
-              className="more-item"
-              onClick={() => {
-                setTab("setup");
-                setMoreOpen(false);
-              }}
-              type="button"
-            >
-              Setup
+            <button className="more-item" onClick={() => { setTab("setup"); setMoreOpen(false); }} type="button">
+              <span className="more-item-icon">⚙</span> Setup
             </button>
+            <div className="more-separator" />
             <button className="more-item danger" onClick={handleLogout} type="button">
-              Sign out
+              <span className="more-item-icon">⏏</span> Sign out
             </button>
           </div>
         </div>
       ) : null}
+
+      {/* ── Toast Notifications ── */}
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }
