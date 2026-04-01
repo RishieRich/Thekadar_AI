@@ -10,7 +10,13 @@
       "Bash(node -e \"const fs = require\\(''fs''\\); const css = fs.readFileSync\\(''dist/assets/index-Dzzr-wkz.css'',''utf8''\\); console.log\\(css.substring\\(0,500\\)\\);\")",
       "Bash(ls:*)",
       "Bash(timeout 5 node server.mjs)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(netstat -ano)",
+      "Bash(grep -v '^0$')",
+      "Bash(while read:*)",
+      "Bash(do taskkill:*)",
+      "Bash(done)",
+      "Bash(TOKEN=\"eyJpZCI6ImMxIiwiaWF0IjoxNzc1MDI2NjMwMzQ1fQ._eah5Rpca0KHDVSbuAtv8HbDVSVqqQ0xKp2usF4uSJg\" curl -s \"http://localhost:8787/api/bootstrap?month=2026-04\" -H \"Authorization: Bearer $TOKEN\")"
     ]
   }
 }
