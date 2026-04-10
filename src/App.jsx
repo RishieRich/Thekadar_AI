@@ -277,10 +277,12 @@ function MetricCard({ label, value, sub, colorClass = "" }) {
 }
 
 function HelpHint({ text }) {
+  const [open, setOpen] = useState(false);
   return (
-    <span className="help-wrap">
-      <button className="help-button" type="button" aria-label="Help">?</button>
+    <span className={`help-wrap${open ? " help-open" : ""}`}>
+      <button className="help-button" type="button" aria-label="Help" onClick={() => setOpen((o) => !o)}>?</button>
       <span className="help-popover">{text}</span>
+      {open && <span className="help-backdrop" onClick={() => setOpen(false)} />}
     </span>
   );
 }
@@ -641,6 +643,7 @@ function App() {
 
   async function handleSaveSite(event) {
     event.preventDefault();
+    if (!siteForm.name.trim()) { setError("Site ka naam daalein."); return; }
     await withBusy(async () => {
       if (editingSiteId) { await updateSite(editingSiteId, siteForm); announce("Site update ho gaya."); }
       else { await createSite(siteForm); announce("Site jod diya!"); }
@@ -667,6 +670,8 @@ function App() {
 
   async function handleSaveWorker(event) {
     event.preventDefault();
+    if (!workerForm.name.trim()) { setError("Worker ka naam daalein."); return; }
+    if (!workerForm.dailyWage || Number(workerForm.dailyWage) <= 0) { setError("Daily wage 0 se zyada honi chahiye."); return; }
     await withBusy(async () => {
       if (editingWorkerId) { await updateWorker(editingWorkerId, workerForm); announce("Worker update ho gaya."); }
       else { await createWorker(workerForm); announce("Worker jod diya!"); }
@@ -693,7 +698,8 @@ function App() {
   async function handleBulkAddWorkers(event) {
     event.preventDefault();
     const names = parseBulkWorkerNames(bulkWorkerForm.names);
-    if (!names.length) { setError("Paste at least one worker name."); return; }
+    if (!names.length) { setError("Kam se kam ek worker ka naam paste karo."); return; }
+    if (!bulkWorkerForm.dailyWage || Number(bulkWorkerForm.dailyWage) <= 0) { setError("Daily wage 0 se zyada honi chahiye."); return; }
     const selectedSiteName = sites.find((s) => s.id === bulkWorkerForm.siteId)?.name || "";
     const beforeCount = workers.length;
     await withBusy(async () => {
@@ -797,7 +803,7 @@ function App() {
     } catch (chatError) {
       setChatMessages((cur) => [
         ...cur,
-        { role: "assistant", content: `AI assistant abhi available nahi hai. Internet aur GROQ_API_KEY check karo. (${chatError.message})`, timestamp: new Date() },
+        { role: "assistant", content: "AI assistant abhi available nahi hai. Internet connection check karo aur thodi der baad try karo.", timestamp: new Date() },
       ]);
     } finally {
       setChatLoading(false);
@@ -973,93 +979,116 @@ function App() {
       siteCountMap[sn] = (siteCountMap[sn] || 0) + 1;
     });
 
+    const isFirstTime = sites.length === 0 && workers.length === 0;
+
     return (
       <div className="stack">
-        {/* ── Company Form ── */}
-        <form className="surface panel" onSubmit={handleSaveCompany}>
-          <SectionHeader
-            eyebrow="Base account setup"
-            title="Company Profile & Rules"
-            sub="Fill Business Info first. Rates and registrations can be set later."
-            help="Save once, then revisit only when rates or registrations change."
-            actions={<div className="status-pill">{company.businessName || "Profile not filled"}</div>}
-          />
-
-          <CollapsibleSection title="Business Info" defaultOpen={true}>
-            <div className="field-grid">
-              <Field label="Business Name">
-                <input value={companyForm.businessName} onChange={(e) => updateCompanyField("businessName", e.target.value)} placeholder="Shree Ganesh Labour Contractor" />
-              </Field>
-              <Field label="Owner Name">
-                <input value={companyForm.ownerName} onChange={(e) => updateCompanyField("ownerName", e.target.value)} />
-              </Field>
-              <Field label="Phone">
-                <input value={companyForm.phone} onChange={(e) => updateCompanyField("phone", e.target.value)} inputMode="tel" />
-              </Field>
-              <Field label="Email">
-                <input value={companyForm.email} onChange={(e) => updateCompanyField("email", e.target.value)} inputMode="email" />
-              </Field>
-              <Field label="Address" full>
-                <textarea value={companyForm.address} onChange={(e) => updateCompanyField("address", e.target.value)} />
-              </Field>
+        {/* ── First-time onboarding ── */}
+        {isFirstTime && (
+          <div className="surface panel onboarding-card">
+            <div className="onboarding-icon">🚀</div>
+            <h3 className="onboarding-title">Setup shuru karein!</h3>
+            <p className="onboarding-sub">Pehle apna site add karo, phir workers. Bas 2 step mein sab ready.</p>
+            <div className="onboarding-steps">
+              <div className="onboarding-step">
+                <span className="onboarding-step-num">1</span>
+                <div>
+                  <strong>Site add karo</strong>
+                  <p>Jahan kaam chal raha hai — site ka naam aur client daalein.</p>
+                </div>
+              </div>
+              <div className="onboarding-step">
+                <span className="onboarding-step-num">2</span>
+                <div>
+                  <strong>Workers add karo</strong>
+                  <p>Quick Add se ek baar mein poori crew paste karo.</p>
+                </div>
+              </div>
             </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Registration Numbers">
-            <div className="field-grid">
-              <Field label="GSTIN">
-                <input value={companyForm.gstin} onChange={(e) => updateCompanyField("gstin", e.target.value)} placeholder="27XXXXX..." />
-              </Field>
-              <Field label="CLRA License">
-                <input value={companyForm.clraLicense} onChange={(e) => updateCompanyField("clraLicense", e.target.value)} />
-              </Field>
-              <Field label="PF Registration">
-                <input value={companyForm.pfRegistration} onChange={(e) => updateCompanyField("pfRegistration", e.target.value)} />
-              </Field>
-              <Field label="ESI Registration">
-                <input value={companyForm.esiRegistration} onChange={(e) => updateCompanyField("esiRegistration", e.target.value)} />
-              </Field>
-            </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Rate Settings">
-            <div className="field-grid">
-              <Field label="Service Charge %">
-                <input type="number" step="0.01" value={companyForm.serviceChargeRate} onChange={(e) => updateCompanyField("serviceChargeRate", e.target.value)} />
-              </Field>
-              <Field label="GST %">
-                <input type="number" step="0.01" value={companyForm.gstRate} onChange={(e) => updateCompanyField("gstRate", e.target.value)} />
-              </Field>
-              <Field label="PF Employee %">
-                <input type="number" step="0.01" value={companyForm.pfEmployeeRate} onChange={(e) => updateCompanyField("pfEmployeeRate", e.target.value)} />
-              </Field>
-              <Field label="PF Employer %">
-                <input type="number" step="0.01" value={companyForm.pfEmployerRate} onChange={(e) => updateCompanyField("pfEmployerRate", e.target.value)} />
-              </Field>
-              <Field label="PF Wage Cap">
-                <input type="number" value={companyForm.pfCap} onChange={(e) => updateCompanyField("pfCap", e.target.value)} />
-              </Field>
-              <Field label="ESI Employee %">
-                <input type="number" step="0.01" value={companyForm.esiEmployeeRate} onChange={(e) => updateCompanyField("esiEmployeeRate", e.target.value)} />
-              </Field>
-              <Field label="ESI Employer %">
-                <input type="number" step="0.01" value={companyForm.esiEmployerRate} onChange={(e) => updateCompanyField("esiEmployerRate", e.target.value)} />
-              </Field>
-              <Field label="ESI Threshold">
-                <input type="number" value={companyForm.esiThreshold} onChange={(e) => updateCompanyField("esiThreshold", e.target.value)} />
-              </Field>
-              <Field label="OT Multiplier">
-                <input type="number" step="0.01" value={companyForm.overtimeMultiplier} onChange={(e) => updateCompanyField("overtimeMultiplier", e.target.value)} />
-              </Field>
-            </div>
-          </CollapsibleSection>
-
-          <div className="button-row" style={{ marginTop: 18 }}>
-            <button className="btn" type="submit" disabled={busy}>
-              {busy ? "Saving..." : "Save company settings"}
-            </button>
           </div>
-        </form>
+        )}
+
+        {/* ── Company Settings (collapsed) ── */}
+        <div className="surface panel">
+          <CollapsibleSection title={`⚙ Company Settings — ${company.businessName || "Not set"}`} defaultOpen={isFirstTime && !company.businessName}>
+            <form onSubmit={handleSaveCompany}>
+              <CollapsibleSection title="Business Info" defaultOpen={true}>
+                <div className="field-grid">
+                  <Field label="Business Name">
+                    <input value={companyForm.businessName} onChange={(e) => updateCompanyField("businessName", e.target.value)} placeholder="Shree Ganesh Labour Contractor" />
+                  </Field>
+                  <Field label="Owner Name">
+                    <input value={companyForm.ownerName} onChange={(e) => updateCompanyField("ownerName", e.target.value)} />
+                  </Field>
+                  <Field label="Phone">
+                    <input value={companyForm.phone} onChange={(e) => updateCompanyField("phone", e.target.value)} inputMode="tel" />
+                  </Field>
+                  <Field label="Email">
+                    <input value={companyForm.email} onChange={(e) => updateCompanyField("email", e.target.value)} inputMode="email" />
+                  </Field>
+                  <Field label="Address" full>
+                    <textarea value={companyForm.address} onChange={(e) => updateCompanyField("address", e.target.value)} />
+                  </Field>
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Registration Numbers">
+                <div className="field-grid">
+                  <Field label="GSTIN">
+                    <input value={companyForm.gstin} onChange={(e) => updateCompanyField("gstin", e.target.value)} placeholder="27XXXXX..." />
+                  </Field>
+                  <Field label="CLRA License">
+                    <input value={companyForm.clraLicense} onChange={(e) => updateCompanyField("clraLicense", e.target.value)} />
+                  </Field>
+                  <Field label="PF Registration">
+                    <input value={companyForm.pfRegistration} onChange={(e) => updateCompanyField("pfRegistration", e.target.value)} />
+                  </Field>
+                  <Field label="ESI Registration">
+                    <input value={companyForm.esiRegistration} onChange={(e) => updateCompanyField("esiRegistration", e.target.value)} />
+                  </Field>
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Rate Settings (change mat karo bina zaroorat ke)">
+                <div className="field-grid">
+                  <Field label="Service Charge %">
+                    <input type="number" step="0.01" value={companyForm.serviceChargeRate} onChange={(e) => updateCompanyField("serviceChargeRate", e.target.value)} />
+                  </Field>
+                  <Field label="GST %">
+                    <input type="number" step="0.01" value={companyForm.gstRate} onChange={(e) => updateCompanyField("gstRate", e.target.value)} />
+                  </Field>
+                  <Field label="PF Employee %">
+                    <input type="number" step="0.01" value={companyForm.pfEmployeeRate} onChange={(e) => updateCompanyField("pfEmployeeRate", e.target.value)} />
+                  </Field>
+                  <Field label="PF Employer %">
+                    <input type="number" step="0.01" value={companyForm.pfEmployerRate} onChange={(e) => updateCompanyField("pfEmployerRate", e.target.value)} />
+                  </Field>
+                  <Field label="PF Wage Cap">
+                    <input type="number" value={companyForm.pfCap} onChange={(e) => updateCompanyField("pfCap", e.target.value)} />
+                  </Field>
+                  <Field label="ESI Employee %">
+                    <input type="number" step="0.01" value={companyForm.esiEmployeeRate} onChange={(e) => updateCompanyField("esiEmployeeRate", e.target.value)} />
+                  </Field>
+                  <Field label="ESI Employer %">
+                    <input type="number" step="0.01" value={companyForm.esiEmployerRate} onChange={(e) => updateCompanyField("esiEmployerRate", e.target.value)} />
+                  </Field>
+                  <Field label="ESI Threshold">
+                    <input type="number" value={companyForm.esiThreshold} onChange={(e) => updateCompanyField("esiThreshold", e.target.value)} />
+                  </Field>
+                  <Field label="OT Multiplier">
+                    <input type="number" step="0.01" value={companyForm.overtimeMultiplier} onChange={(e) => updateCompanyField("overtimeMultiplier", e.target.value)} />
+                  </Field>
+                </div>
+              </CollapsibleSection>
+
+              <div className="button-row mt-18">
+                <button className="btn" type="submit" disabled={busy}>
+                  {busy ? "Saving..." : "Save company settings"}
+                </button>
+              </div>
+            </form>
+          </CollapsibleSection>
+        </div>
 
         {/* ── Sites & Workers ── */}
         <div className="split">
@@ -1086,7 +1115,7 @@ function App() {
               </div>
             </form>
 
-            <div className="stack" style={{ marginTop: 18 }}>
+            <div className="stack mt-18">
               {sites.length ? sites.map((site) => (
                 <div className="list-card" key={site.id}>
                   <div className="list-header">
@@ -1097,8 +1126,8 @@ function App() {
                     {deletingSiteId === site.id ? (
                       <div className="confirm-inline-cell">
                         <span>Delete karein?</span>
-                        <button className="btn-ghost btn-danger" type="button" style={{ padding: "7px 12px" }} onClick={() => handleDeleteSite(site.id)}>Haan</button>
-                        <button className="btn-ghost" type="button" style={{ padding: "7px 12px" }} onClick={() => setDeletingSiteId("")}>Nahi</button>
+                        <button className="btn-ghost btn-danger btn-sm" type="button" onClick={() => handleDeleteSite(site.id)}>Haan</button>
+                        <button className="btn-ghost btn-sm" type="button" onClick={() => setDeletingSiteId("")}>Nahi</button>
                       </div>
                     ) : (
                       <div className="button-row">
@@ -1107,7 +1136,7 @@ function App() {
                       </div>
                     )}
                   </div>
-                  <p className="muted" style={{ marginTop: 10 }}>{site.location || "No location set"}</p>
+                  <p className="muted mt-10">{site.location || "No location set"}</p>
                 </div>
               )) : (
                 <div className="empty-state">
@@ -1133,7 +1162,7 @@ function App() {
                 <span><strong>{workers.length}</strong> total workers</span>
                 <span>(<strong>{activeCount}</strong> active, <strong>{inactiveCount}</strong> inactive)</span>
                 {Object.entries(siteCountMap).map(([sn, cnt]) => (
-                  <span key={sn} style={{ background: "var(--accent-soft)", padding: "2px 8px", borderRadius: 999, fontSize: 12 }}>{sn}: {cnt}</span>
+                  <span key={sn} className="site-count-chip">{sn}: {cnt}</span>
                 ))}
               </div>
             )}
@@ -1150,7 +1179,7 @@ function App() {
                   />
                 </Field>
                 {bulkWorkerForm.names.trim() && (
-                  <p className="field-hint" style={{ marginTop: -4 }}>
+                  <p className="field-hint field-hint-count">
                     {parseBulkWorkerNames(bulkWorkerForm.names).length} names entered
                   </p>
                 )}
@@ -1176,57 +1205,52 @@ function App() {
                 </div>
                 <div className="button-row">
                   <button className="btn" type="submit" disabled={busy}>Add pasted crew</button>
-                  {loadDemoConfirming ? (
-                    <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                      <span style={{ color: "var(--muted)" }}>72 demo workers load karein?</span>
-                      <button className="btn" type="button" onClick={handleLoadDemoCrew} disabled={busy} style={{ padding: "8px 14px", fontSize: 13 }}>Haan</button>
-                      <button className="btn-ghost" type="button" onClick={() => setLoadDemoConfirming(false)} style={{ padding: "8px 14px", fontSize: 13 }}>Nahi</button>
-                    </span>
-                  ) : (
-                    <button className="btn-ghost" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Load 72 demo workers</button>
-                  )}
                 </div>
               </form>
             </div>
 
             {/* Single Worker Form */}
-            <form className="stack" onSubmit={handleSaveWorker} style={{ marginTop: 18 }}>
-              <SectionHeader title={editingWorkerId ? "Edit Worker" : "Add Single Worker"} sub="Ek worker at a time." help="Best for quick corrections after the crew already exists." />
-              <div className="field-grid">
-                <Field label="Worker Name">
-                  <input value={workerForm.name} onChange={(e) => updateWorkerField("name", e.target.value)} placeholder="Ramesh Patel" />
-                </Field>
-                <Field label="Role">
-                  <input value={workerForm.role} onChange={(e) => updateWorkerField("role", e.target.value)} placeholder="Fitter" />
-                </Field>
-                <Field label="Daily Wage">
-                  <input type="number" value={workerForm.dailyWage} onChange={(e) => updateWorkerField("dailyWage", e.target.value)} placeholder="650" />
-                </Field>
-                <Field label="Site">
-                  <select value={workerForm.siteId} onChange={(e) => updateWorkerField("siteId", e.target.value)}>
-                    <option value="">Unassigned</option>
-                    {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </Field>
-                <Field label="UAN">
-                  <input value={workerForm.uan} onChange={(e) => updateWorkerField("uan", e.target.value)} />
-                </Field>
-                <Field label="ESI Number">
-                  <input value={workerForm.esiNumber} onChange={(e) => updateWorkerField("esiNumber", e.target.value)} />
-                </Field>
-                <Field label="Status">
-                  <select value={workerForm.active ? "active" : "inactive"} onChange={(e) => updateWorkerField("active", e.target.value === "active")}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </Field>
-              </div>
-              <div className="button-row">
-                <button className="btn" type="submit" disabled={busy}>{editingWorkerId ? "Update worker" : "Add worker"}</button>
-                {editingWorkerId ? (
-                  <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(""); setWorkerForm(emptyWorkerForm()); }}>Cancel</button>
-                ) : null}
-              </div>
+            <div className="mt-18">
+              <CollapsibleSection title={editingWorkerId ? "✏ Edit Worker" : "Ek worker add karo (single)"} defaultOpen={Boolean(editingWorkerId)}>
+                <form className="stack" onSubmit={handleSaveWorker}>
+                  <div className="field-grid">
+                    <Field label="Worker Name">
+                      <input value={workerForm.name} onChange={(e) => updateWorkerField("name", e.target.value)} placeholder="Ramesh Patel" />
+                    </Field>
+                    <Field label="Role">
+                      <input value={workerForm.role} onChange={(e) => updateWorkerField("role", e.target.value)} placeholder="Fitter" />
+                    </Field>
+                    <Field label="Daily Wage">
+                      <input type="number" value={workerForm.dailyWage} onChange={(e) => updateWorkerField("dailyWage", e.target.value)} placeholder="650" />
+                    </Field>
+                    <Field label="Site">
+                      <select value={workerForm.siteId} onChange={(e) => updateWorkerField("siteId", e.target.value)}>
+                        <option value="">Unassigned</option>
+                        {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="UAN">
+                      <input value={workerForm.uan} onChange={(e) => updateWorkerField("uan", e.target.value)} />
+                    </Field>
+                    <Field label="ESI Number">
+                      <input value={workerForm.esiNumber} onChange={(e) => updateWorkerField("esiNumber", e.target.value)} />
+                    </Field>
+                    <Field label="Status">
+                      <select value={workerForm.active ? "active" : "inactive"} onChange={(e) => updateWorkerField("active", e.target.value === "active")}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="button-row">
+                    <button className="btn" type="submit" disabled={busy}>{editingWorkerId ? "Update worker" : "Add worker"}</button>
+                    {editingWorkerId ? (
+                      <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(""); setWorkerForm(emptyWorkerForm()); }}>Cancel</button>
+                    ) : null}
+                  </div>
+                </form>
+              </CollapsibleSection>
+            </div>
             </form>
 
             {/* Worker Search */}
@@ -1238,7 +1262,7 @@ function App() {
 
             {/* Workers Table (desktop) */}
             {visibleWorkers.length ? (
-              <div className="table-wrap keyboard-scroll workers-table-wrap" tabIndex={0} onKeyDown={handleScrollableKeyDown} style={{ marginTop: 16 }}>
+              <div className="table-wrap keyboard-scroll workers-table-wrap mt-16" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
                 <table className="compact-table">
                   <thead>
                     <tr>
@@ -1268,8 +1292,8 @@ function App() {
                             {isDeleting ? (
                               <div className="confirm-inline-cell">
                                 <span>Delete?</span>
-                                <button className="btn-ghost btn-danger" type="button" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => handleDeleteWorker(worker.id)}>Haan</button>
-                                <button className="btn-ghost" type="button" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setDeletingWorkerId("")}>Nahi</button>
+                                <button className="btn-ghost btn-danger btn-sm" type="button" onClick={() => handleDeleteWorker(worker.id)}>Haan</button>
+                                <button className="btn-ghost btn-sm" type="button" onClick={() => setDeletingWorkerId("")}>Nahi</button>
                               </div>
                             ) : (
                               <div className="button-row tight">
@@ -1285,7 +1309,7 @@ function App() {
                 </table>
               </div>
             ) : (
-              <div className="empty-state" style={{ marginTop: 16 }}>
+              <div className="empty-state mt-16">
                 <div className="empty-state-icon">👷</div>
                 <h4>Koi worker nahi mila</h4>
                 <p>Search ya site filter change karein, ya upar se worker add karein.</p>
@@ -1314,10 +1338,10 @@ function App() {
                         <span>ESI: {worker.esiNumber || "—"}</span>
                       </div>
                       {isDeleting ? (
-                        <div className="worker-card-confirm" style={{ marginTop: 10 }}>
+                        <div className="worker-card-confirm mt-10">
                           <span>Delete karein?</span>
-                          <button className="btn-ghost btn-danger" type="button" style={{ padding: "8px 14px", fontSize: 13 }} onClick={() => handleDeleteWorker(worker.id)}>Haan</button>
-                          <button className="btn-ghost" type="button" style={{ padding: "8px 14px", fontSize: 13 }} onClick={() => setDeletingWorkerId("")}>Nahi</button>
+                          <button className="btn-ghost btn-danger btn-sm" type="button" onClick={() => handleDeleteWorker(worker.id)}>Haan</button>
+                          <button className="btn-ghost btn-sm" type="button" onClick={() => setDeletingWorkerId("")}>Nahi</button>
                         </div>
                       ) : (
                         <div className="worker-card-actions">
@@ -1344,7 +1368,7 @@ function App() {
               <Field label="Sites CSV"><input type="file" accept=".csv,text/csv" onChange={handleSitesFileChange} /></Field>
               <Field label="Workers CSV"><input type="file" accept=".csv,text/csv" onChange={handleWorkersFileChange} /></Field>
             </div>
-            <div className="button-row" style={{ marginTop: 12 }}>
+            <div className="button-row mt-12">
               <button className="btn-ghost" type="button" onClick={handlePreviewImport} disabled={!importSitesText && !importWorkersText}>Preview import</button>
             </div>
             {importPreview ? (
@@ -1367,6 +1391,22 @@ function App() {
             ) : null}
           </CollapsibleSection>
         </div>
+
+        {/* Demo Data — for testing only */}
+        <div className="surface panel demo-section">
+          <CollapsibleSection title="Demo data load karo (testing ke liye)">
+            <p className="demo-section-note">Yeh sirf testing ke liye hai. 72 demo workers aur 3 sites load honge.</p>
+            {loadDemoConfirming ? (
+              <div className="demo-confirm-row">
+                <span>72 demo workers load karein?</span>
+                <button className="btn btn-sm" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Haan, load karo</button>
+                <button className="btn-ghost btn-sm" type="button" onClick={() => setLoadDemoConfirming(false)}>Nahi</button>
+              </div>
+            ) : (
+              <button className="btn-ghost" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Load 72 demo workers</button>
+            )}
+          </CollapsibleSection>
+        </div>
       </div>
     );
   }
@@ -1377,7 +1417,7 @@ function App() {
     return (
       <div className="stack">
         {/* View Toggle */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div className="attendance-view-header">
           <div className="attendance-view-tabs">
             <button className={`attendance-view-tab${attendanceView === "today" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("today")}>
               ✔ Aaj ki haziri
@@ -1410,7 +1450,7 @@ function App() {
                   {s}: {todaySummary[s] || 0}
                 </span>
               ))}
-              <span className="att-chip" style={{ background: "rgba(74,101,88,0.06)", border: "1px solid var(--line)", color: "var(--muted)" }}>
+              <span className="att-chip att-chip-total">
                 Total: {attendanceRows.length}
               </span>
             </div>
@@ -1421,11 +1461,11 @@ function App() {
               {markAllConfirming ? (
                 <div className="mark-all-confirm-inline">
                   <span>{attendanceRows.length} workers ko present mark karein?</span>
-                  <button className="btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleMarkAllPresent}>Haan, karo</button>
-                  <button className="btn-ghost" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={() => setMarkAllConfirming(false)}>Nahi</button>
+                  <button className="btn btn-sm" type="button" onClick={handleMarkAllPresent}>Haan, karo</button>
+                  <button className="btn-ghost btn-sm" type="button" onClick={() => setMarkAllConfirming(false)}>Nahi</button>
                 </div>
               ) : (
-                <button className="btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={() => setMarkAllConfirming(true)}>
+                <button className="btn btn-sm" type="button" onClick={() => setMarkAllConfirming(true)}>
                   Sabko Present ✔
                 </button>
               )}
@@ -1447,7 +1487,7 @@ function App() {
 
             {/* Today Cards grouped by site */}
             {attendanceRows.length ? (
-              <div style={{ marginTop: 16 }}>
+              <div className="mt-16">
                 {siteGroups.map((group) => (
                   <div key={group.siteKey}>
                     <div className="site-group-header">
@@ -1484,7 +1524,7 @@ function App() {
                 ))}
               </div>
             ) : (
-              <div className="empty-state" style={{ marginTop: 16 }}>
+              <div className="empty-state mt-16">
                 <div className="empty-state-icon">👷</div>
                 <h4>Koi worker nahi mila</h4>
                 <p>Search ya site filter change karein. Ya Setup mein jaake workers add karein.</p>
@@ -1496,6 +1536,7 @@ function App() {
         {/* MONTH REGISTER */}
         {attendanceView === "month" && (
           <div className="surface panel">
+            <p className="month-register-mobile-hint">Yeh table bade screen pe best dikhta hai. Left-right scroll karein.</p>
             <SectionHeader
               title="Month Register"
               sub={correctionMode ? "Correction mode ON hai. Purani dates edit ho sakti hain. Future dates locked rehenge." : "Sirf aaj ki date editable hai. Purani dates locked hain."}
@@ -1508,7 +1549,7 @@ function App() {
                 </div>
               }
             />
-            <div className="table-wrap keyboard-scroll" tabIndex={0} onKeyDown={handleScrollableKeyDown} style={{ marginTop: 16 }}>
+            <div className="table-wrap keyboard-scroll mt-16" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
               <table className="attendance-table">
                 <thead>
                   <tr>
@@ -1580,13 +1621,13 @@ function App() {
             </div>
             <div className="payroll-total-card">
               <p className="pt-label">Total Net Payable</p>
-              <p className="pt-value mono" style={{ color: "var(--accent-strong)" }}>{formatCurrency(monthModel.totals.net)}</p>
+              <p className="pt-value mono text-accent">{formatCurrency(monthModel.totals.net)}</p>
             </div>
           </div>
         )}
 
         {/* Search */}
-        <div style={{ marginBottom: 12 }}>
+        <div className="mb-12">
           <Field label="Worker dhundo" full>
             <input value={payrollSearch} onChange={(e) => setPayrollSearch(e.target.value)} placeholder="Naam, role, ya site..." />
           </Field>
@@ -1595,7 +1636,7 @@ function App() {
         {payrollRows.length ? (
           <>
             {/* Desktop Table */}
-            <div className="table-wrap keyboard-scroll payroll-table-wrap" tabIndex={0} onKeyDown={handleScrollableKeyDown} style={{ marginTop: 4 }}>
+            <div className="table-wrap keyboard-scroll payroll-table-wrap mt-4" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
               <table>
                 <thead>
                   <tr>
@@ -1626,9 +1667,9 @@ function App() {
                       <td>{row.payroll.overtimeDays}</td>
                       <td className="mono">{formatCurrency(row.payroll.basic)}</td>
                       <td className="mono">{formatCurrency(row.payroll.gross)}</td>
-                      <td className="mono" style={{ color: "var(--danger)" }}>-{formatCurrency(row.payroll.pfEmployee)}</td>
-                      <td className="mono" style={{ color: "var(--danger)" }}>-{formatCurrency(row.payroll.esiEmployee)}</td>
-                      <td className="mono" style={{ fontWeight: 700, color: "var(--accent-strong)" }}>{formatCurrency(row.payroll.net)}</td>
+                      <td className="mono text-danger">-{formatCurrency(row.payroll.pfEmployee)}</td>
+                      <td className="mono text-danger">-{formatCurrency(row.payroll.esiEmployee)}</td>
+                      <td className="mono text-bold text-accent">{formatCurrency(row.payroll.net)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1664,14 +1705,14 @@ function App() {
             </div>
           </>
         ) : (
-          <div className="empty-state" style={{ marginTop: 16 }}>
+          <div className="empty-state mt-16">
             <div className="empty-state-icon">💰</div>
             <h4>Koi worker nahi mila</h4>
             <p>Site filter ya search change karein.</p>
           </div>
         )}
 
-        <div className="button-row" style={{ marginTop: 16 }}>
+        <div className="button-row mt-16">
           <button className="btn-download" type="button" onClick={() => { downloadWages(month); showToast("Excel download shuru ho gaya!", "success"); }}>
             ⬇ Excel Download karo
           </button>
@@ -1690,7 +1731,7 @@ function App() {
               <strong>⚠ Registration missing hai</strong>
               {missingRegs.join(", ")} set nahi hai. Invoice mein blank aayega.
             </div>
-            <button className="btn-ghost" type="button" onClick={() => setTab("setup")} style={{ fontSize: 13, padding: "8px 14px" }}>
+            <button className="btn-ghost btn-sm" type="button" onClick={() => setTab("setup")}>
               Setup kholein →
             </button>
           </div>
@@ -1853,9 +1894,6 @@ function App() {
                 placeholder="Kuch bhi pucho — Hindi ya English mein..."
                 rows={1}
               />
-              <button className="chat-voice-btn" type="button" title="Voice input — jaldi aayega!" onClick={() => showToast("Voice input jaldi aayega!", "info")} aria-label="Voice input">
-                🎤
-              </button>
               <button className="chat-send-btn" type="submit" disabled={chatLoading} aria-label="Send message">
                 ▶
               </button>
@@ -1865,31 +1903,19 @@ function App() {
 
         {/* Context Panel (desktop only) */}
         <div className="surface panel chat-context-panel">
-          <SectionHeader title="Chat Context" sub="Yeh data AI ko diya jaata hai." help="Agar reply galat lage toh site filter aur aaj ki haziri check karein." />
+          <SectionHeader title="Chat Info" sub="AI ko yeh data dikh raha hai." />
           <div className="stack">
             <div className="mini-card">
               <h4>Scope</h4>
               <p>Month: {monthTitle}</p>
               <p>Filter: {selectedSite ? selectedSite.name : "All sites"}</p>
-              <p>Workers in context: {monthModel.rows.length}</p>
-            </div>
-            <div className="mini-card">
-              <h4>AI Can Answer About</h4>
-              <p>Company profile aur rates</p>
-              <p>Sites aur workers</p>
-              <p>Attendance summaries aur payroll</p>
-              <p>Invoice totals</p>
+              <p>Workers: {monthModel.rows.length}</p>
             </div>
             <div className="mini-card">
               <h4>Quick Suggestions</h4>
               {CHAT_SUGGESTIONS.default.map((s) => (
-                <button key={s} className="chat-chip" type="button" style={{ marginTop: 6, width: "100%", textAlign: "left", borderRadius: 10 }} onClick={() => setChatInput(s)}>{s}</button>
+                <button key={s} className="chat-chip chat-chip-context" type="button" onClick={() => setChatInput(s)}>{s}</button>
               ))}
-            </div>
-            <div className="mini-card">
-              <h4>Required Env</h4>
-              <p className="mono">GROQ_API_KEY</p>
-              <p className="mono">GROQ_MODEL (optional)</p>
             </div>
           </div>
         </div>
