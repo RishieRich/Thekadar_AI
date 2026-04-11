@@ -125,32 +125,30 @@ export function importBatch(data) {
   });
 }
 
-export function downloadWages(month) {
+export async function downloadWages(month) {
   const token = getToken();
   const url = `${API_BASE}/export/wages?month=${encodeURIComponent(month)}`;
-  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then((r) => r.blob())
-    .then((blob) => {
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `Wages_${month}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(blobUrl);
-    });
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error("Excel download fail ho gaya.");
+  const blob = await r.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = `Wages_${month}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
 }
 
-export function downloadInvoice(month, siteId) {
+export async function downloadInvoice(month, siteId) {
   const token = getToken();
   const url = `${API_BASE}/export/invoice?month=${encodeURIComponent(month)}&siteId=${encodeURIComponent(siteId || "all")}`;
-  fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    .then((r) => r.blob())
-    .then((blob) => {
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `Invoice_${month}.pdf`;
-      a.click();
-      URL.revokeObjectURL(blobUrl);
-    });
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error("PDF download fail ho gaya.");
+  const blob = await r.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = `Invoice_${month}.pdf`;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
 }

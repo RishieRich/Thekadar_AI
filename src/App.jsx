@@ -1251,7 +1251,6 @@ function App() {
                 </form>
               </CollapsibleSection>
             </div>
-            </form>
 
             {/* Worker Search */}
             <div className="workers-toolbar">
@@ -1713,7 +1712,7 @@ function App() {
         )}
 
         <div className="button-row mt-16">
-          <button className="btn-download" type="button" onClick={() => { downloadWages(month); showToast("Excel download shuru ho gaya!", "success"); }}>
+          <button className="btn-download" type="button" onClick={async () => { showToast("Excel bana raha hai...", "info"); try { await downloadWages(month); showToast("Excel download ho gaya!", "success"); } catch (e) { showToast(e.message, "error"); } }}>
             ⬇ Excel Download karo
           </button>
         </div>
@@ -1821,7 +1820,7 @@ function App() {
 
           {/* Actions */}
           <div className="invoice-actions">
-            <button className="btn" type="button" onClick={() => { downloadInvoice(month, siteFilter); showToast("PDF download shuru ho gaya!", "success"); }}>
+            <button className="btn" type="button" onClick={async () => { showToast("PDF bana raha hai...", "info"); try { await downloadInvoice(month, siteFilter); showToast("PDF download ho gaya!", "success"); } catch (e) { showToast(e.message, "error"); } }}>
               ⬇ PDF Download karo
             </button>
             <button
