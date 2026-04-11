@@ -26,6 +26,7 @@ import {
   formatCurrency,
   monthKeyFromDate,
   monthLabel,
+  parseMonthKey,
 } from "../shared/payroll.js";
 
 const NAV_ITEMS = [
@@ -437,10 +438,25 @@ function LoginPage({ onLogin }) {
 
 function App() {
   const currentDate = new Date();
-  const month = monthKeyFromDate(currentDate);
-  const monthTitle = monthLabel(month);
+  const currentMonthKey = monthKeyFromDate(currentDate);
   const todayDay = currentDate.getDate();
   const todayDayKey = String(todayDay);
+
+  const [month, setMonth] = useState(currentMonthKey);
+  const monthTitle = monthLabel(month);
+  const isCurrentMonth = month === currentMonthKey;
+
+  function goToPrevMonth() {
+    const { year, month: m } = parseMonthKey(month);
+    const d = new Date(year, m - 2, 1);
+    setMonth(monthKeyFromDate(d));
+  }
+
+  function goToNextMonth() {
+    const { year, month: m } = parseMonthKey(month);
+    const nextKey = monthKeyFromDate(new Date(year, m, 1));
+    if (nextKey <= currentMonthKey) setMonth(nextKey);
+  }
 
   const pageRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -738,11 +754,17 @@ function App() {
   }
 
   /* ── Attendance handlers ──────────────────────── */
-  function isFutureDay(day) { return Number(day) > todayDay; }
-  function isPastDay(day) { return Number(day) < todayDay; }
+  function isFutureDay(day) {
+    if (!isCurrentMonth) return false; // past months have no future days
+    return Number(day) > todayDay;
+  }
+  function isPastDay(day) {
+    if (!isCurrentMonth) return true; // all days in a past month are past
+    return Number(day) < todayDay;
+  }
   function isAttendanceEditable(day) {
     if (isFutureDay(day)) return false;
-    if (Number(day) === todayDay) return true;
+    if (isCurrentMonth && Number(day) === todayDay) return true;
     return correctionMode;
   }
 
@@ -750,8 +772,8 @@ function App() {
     const dayKey = String(day);
     const allowPastEdit = Boolean(options.overridePastEdit);
     const dayNum = Number(dayKey);
-    if (dayNum > todayDay) { setError("Future dates cannot be updated yet."); return; }
-    if (dayNum < todayDay && !allowPastEdit) { setError("Past dates are locked. Enable correction mode for older dates."); return; }
+    if (isFutureDay(day)) { setError("Future dates cannot be updated yet."); return; }
+    if ((isPastDay(day) || !isCurrentMonth) && !allowPastEdit) { setError("Past dates are locked. Enable correction mode to edit."); return; }
     clearMessages();
     const cellKey = `${workerId}-${dayKey}`;
     const curAtt = attendance[workerId] || createDefaultAttendanceMap(month, {});
@@ -775,8 +797,10 @@ function App() {
     const dayKey = String(day);
     const allowPastEdit = Boolean(options.overridePastEdit);
     const dayNum = Number(dayKey);
-    if (dayNum > todayDay) return;
-    if (dayNum < todayDay && !allowPastEdit) return;
+    const isToday = isCurrentMonth && dayNum === todayDay;
+    const isFuture = isCurrentMonth && dayNum > todayDay;
+    if (isFuture) return;
+    if (!isToday && !allowPastEdit) return; // past days/months need correction mode
     clearMessages();
     const cellKey = `${workerId}-${dayKey}`;
     const curAtt = attendance[workerId] || createDefaultAttendanceMap(month, {});
@@ -797,6 +821,7 @@ function App() {
   }
 
   async function handleMarkAllPresentForRows(rows) {
+    if (!isCurrentMonth) return; // only for current month
     let changed = 0;
     for (const row of rows) {
       if (row.attendance[todayDayKey] !== "P") {
@@ -1442,22 +1467,30 @@ function App() {
       <div className="stack">
         {/* Header row: date context + view toggle */}
         <div className="att-page-header">
-          <div className="att-date-context">
-            <span className="att-date-label">{todayDateStr}</span>
-            <span className="att-day-badge">Day {todayDay}</span>
-          </div>
-          <div className="attendance-view-tabs">
-            <button className={`attendance-view-tab${attendanceView === "today" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("today")}>
-              Aaj ki haziri
-            </button>
-            <button className={`attendance-view-tab${attendanceView === "month" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("month")}>
-              Mahina register
-            </button>
-          </div>
+          {isCurrentMonth ? (
+            <div className="att-date-context">
+              <span className="att-date-label">{todayDateStr}</span>
+              <span className="att-day-badge">Day {todayDay}</span>
+            </div>
+          ) : (
+            <div className="att-past-month-notice">
+              Past month — {monthTitle}. Haziri dekhein ya correction mode se edit karein.
+            </div>
+          )}
+          {isCurrentMonth && (
+            <div className="attendance-view-tabs">
+              <button className={`attendance-view-tab${attendanceView === "today" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("today")}>
+                Aaj ki haziri
+              </button>
+              <button className={`attendance-view-tab${attendanceView === "month" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("month")}>
+                Mahina register
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* TODAY VIEW */}
-        {attendanceView === "today" && (
+        {/* TODAY VIEW — current month only */}
+        {isCurrentMonth && attendanceView === "today" && (
           <div className="surface panel">
             {/* Summary strip */}
             <div className="att-summary-strip">
@@ -1547,18 +1580,22 @@ function App() {
           </div>
         )}
 
-        {/* MONTH REGISTER */}
-        {attendanceView === "month" && (
+        {/* MONTH REGISTER — shown for past months always, or when month tab is active */}
+        {(!isCurrentMonth || attendanceView === "month") && (
           <div className="surface panel">
             <div className="att-month-header">
               <div>
-                <h3 className="section-title">Month Register — {month}</h3>
+                <h3 className="section-title">Month Register — {monthTitle}</h3>
                 <p className="muted" style={{ fontSize: 13, marginTop: 2 }}>
-                  {correctionMode ? "Correction mode ON — purani dates edit ho sakti hain." : "Sirf aaj ki date editable hai."}
+                  {correctionMode
+                    ? "Correction mode ON — koi bhi past date edit ho sakti hai."
+                    : !isCurrentMonth
+                    ? "Past month — sirf dekhne ke liye. Edit ke liye correction mode on karein."
+                    : "Sirf aaj ki date editable hai. Purani dates ke liye correction mode on karein."}
                 </p>
               </div>
               <button className={`btn-ghost btn-sm${correctionMode ? " active-toggle" : ""}`} type="button" onClick={() => setCorrectionMode((c) => !c)}>
-                {correctionMode ? "Close correction" : "Past-date correction"}
+                {correctionMode ? "Close correction" : "Correction mode"}
               </button>
             </div>
             <p className="month-register-mobile-hint">Left-right scroll karein — mobile pe horizontal scroll karo.</p>
@@ -1589,7 +1626,7 @@ function App() {
                           <td className={`attendance-cell${Number(day) === todayDay ? " attendance-col-today" : ""}`} key={`${row.id}-${day}`}>
                             <button
                               className={`attendance-chip status-${displayStatus}${editable ? "" : " locked"}${future ? " future" : ""}`}
-                              onClick={() => handleToggleAttendance(row.id, day, { overridePastEdit: correctionMode && isPastDay(day) })}
+                              onClick={() => handleToggleAttendance(row.id, day, { overridePastEdit: correctionMode && (isPastDay(day) || !isCurrentMonth) })}
                               type="button"
                               disabled={!editable}
                               title={future ? "Future date" : editable ? STATUS_LABELS[displayStatus] : "Locked. Correction mode enable karein."}
@@ -2007,8 +2044,15 @@ function App() {
         <div className="page-header surface">
           <div className="page-header-copy">
             <div className="page-header-eyebrow">
-              <p className="eyebrow">Current month only</p>
-              <span className="month-lock-inline">{monthTitle}</span>
+              {/* Month navigator */}
+              <div className="month-nav">
+                <button className="month-nav-btn" type="button" onClick={goToPrevMonth} aria-label="Previous month">‹</button>
+                <span className="month-nav-label">
+                  {monthTitle}
+                  {!isCurrentMonth && <span className="month-nav-past-badge">Past</span>}
+                </span>
+                <button className="month-nav-btn" type="button" onClick={goToNextMonth} disabled={isCurrentMonth} aria-label="Next month">›</button>
+              </div>
             </div>
             <h2>{NAV_ITEMS.find((i) => i.id === tab)?.label || "Dashboard"}</h2>
             <p>{company.businessName || "Configure your business in Setup"}</p>
@@ -2031,7 +2075,7 @@ function App() {
               </select>
             </div>
 
-            <button className="btn-ghost" onClick={() => loadBootstrap(month)} type="button" aria-label="Reload data">↺ Reload</button>
+            <button className="btn-ghost" onClick={() => loadBootstrap(month)} type="button" aria-label="Reload data">↺</button>
             <HelpHint text={TAB_HELP[tab]} />
           </div>
         </div>
@@ -2044,7 +2088,7 @@ function App() {
         {loading ? (
           <div className="loading-center">
             <div className="loading-spinner" />
-            <p>Loading current month data...</p>
+            <p>Loading {monthTitle} data...</p>
           </div>
         ) : (
           <div className="tab-stage">{renderActiveTab()}</div>

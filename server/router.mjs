@@ -6,9 +6,11 @@ import {
   ATTENDANCE_STATUSES,
   calculateMonthModel,
   createDefaultAttendanceMap,
+  daysInMonth,
   ensureMonthAttendance,
   monthKeyFromDate,
   monthLabel,
+  parseMonthKey,
 } from "../shared/payroll.js";
 
 // ---------------------------------------------------------------------------
@@ -301,9 +303,6 @@ export async function handleRequest(req, res) {
       const day = String(dayNumber);
       const status = sanitizeText(body.status).toUpperCase();
       const allowPastEdit = body.overridePastEdit === true;
-      const today = new Date();
-      const currentMonthKey = monthKeyFromDate(today);
-      const todayDay = today.getDate();
 
       if (
         !workerId ||
@@ -316,17 +315,21 @@ export async function handleRequest(req, res) {
         return;
       }
 
-      if (monthKey !== currentMonthKey) {
-        json(res, 403, { error: "Only the current month can be edited from the daily app view." });
+      // Block future dates only — past months and past days require correction mode
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { year: editYear, month: editMonth } = parseMonthKey(monthKey);
+      const editDate = new Date(editYear, editMonth - 1, dayNumber);
+      const currentMonthKey = monthKeyFromDate(new Date());
+      const todayDay = new Date().getDate();
+
+      if (editDate > today) {
+        json(res, 403, { error: "Future dates cannot be updated." });
         return;
       }
 
-      if (dayNumber > todayDay) {
-        json(res, 403, { error: "Future dates cannot be updated yet." });
-        return;
-      }
-
-      if (dayNumber < todayDay && !allowPastEdit) {
+      const isCurrentMonthAndToday = monthKey === currentMonthKey && dayNumber === todayDay;
+      if (!isCurrentMonthAndToday && !allowPastEdit) {
         json(res, 403, { error: "Past dates are locked. Enable correction mode to edit older attendance." });
         return;
       }
