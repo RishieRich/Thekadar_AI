@@ -2156,12 +2156,365 @@ tr:nth-child(even) td {
   color: var(--muted);
 }
 
+/* kept for compatibility — replaced by att-page-header below */
 .attendance-view-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* ── Attendance page: redesigned ──────────────────── */
+
+.att-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.att-date-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.att-date-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.att-day-badge {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid rgba(0, 184, 90, 0.25);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Summary strip */
+.att-summary-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.att-mark-all-btn {
+  margin-left: auto;
+  background: var(--accent-strong);
+  color: #011c0b;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 140ms;
+}
+.att-mark-all-btn:hover { opacity: 0.85; }
+.att-mark-all-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Legend strip */
+.att-legend-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.att-legend-item {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+/* Search row */
+.att-search-row {
+  margin-bottom: 12px;
+}
+
+.att-search-input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 140ms;
+}
+.att-search-input:focus {
+  border-color: var(--accent-strong);
+  background: var(--panel-strong);
+}
+
+/* Worker list container */
+.att-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Site group header inside list */
+.att-site-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 6px;
+  margin-top: 16px;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 2px;
+}
+.att-site-header:first-child { margin-top: 4px; }
+
+.att-site-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.att-site-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.att-site-mark-all {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.att-site-mark-all:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+
+/* Compact worker row */
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+.att-row:last-child { border-bottom: none; }
+
+.att-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.att-row-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.att-row-role {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inline status buttons */
+.att-row-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.att-btn {
+  width: 36px;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 100ms, border-color 100ms, color 100ms;
+  font-family: "DM Mono", monospace;
+}
+.att-btn:hover { border-color: var(--accent-strong); color: var(--text); }
+
+.att-btn-P.att-btn-active  { background: rgba(0, 184, 90, 0.18); color: var(--accent-strong); border-color: var(--accent-strong); }
+.att-btn-A.att-btn-active  { background: rgba(212, 93, 80, 0.14); color: var(--danger); border-color: var(--danger); }
+.att-btn-HD.att-btn-active { background: rgba(184, 134, 11, 0.14); color: var(--warn); border-color: var(--warn); }
+.att-btn-OT.att-btn-active { background: rgba(45, 137, 208, 0.14); color: var(--info); border-color: var(--info); }
+.att-btn-WO.att-btn-active { background: rgba(74, 101, 88, 0.1); color: var(--muted); border-color: var(--muted); }
+
+/* Save indicator dot on att-row */
+.att-row-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.att-row-dot.saving { background: var(--warn); animation: pulse 0.8s infinite; }
+.att-row-dot.saved  { background: var(--accent-strong); }
+
+/* Month register header */
+.att-month-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+/* ── Setup page: redesigned ───────────────────────── */
+
+.setup-start-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--accent-soft);
+  border: 1px solid rgba(0, 184, 90, 0.25);
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 14px;
+  color: var(--text);
+}
+.setup-start-banner strong {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.setup-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--line);
+}
+
+.setup-tab {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 140ms, border-color 140ms;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.setup-tab:active { transform: none; }
+.setup-tab:hover { color: var(--text); }
+.setup-tab.active {
+  color: var(--accent-strong);
+  border-bottom-color: var(--accent-strong);
+}
+
+.setup-tab-count {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.setup-section-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 10px 0 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.setup-section-note {
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+.setup-divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 22px 0;
+}
+
+/* Clean list row for sites list */
+.setup-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setup-list-row:last-child { border-bottom: none; }
+
+.setup-list-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.setup-list-row-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.setup-list-row-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.setup-warning-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: rgba(184, 134, 11, 0.08);
+  border: 1px solid rgba(184, 134, 11, 0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--warn);
+  font-weight: 600;
+  margin-bottom: 16px;
 }
 
 .field-hint-count {
@@ -2602,5 +2955,44 @@ tr:nth-child(even) td {
 
   .payroll-totals {
     grid-template-columns: 1fr;
+  }
+
+  /* Attendance redesign — mobile */
+  .att-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .att-date-label {
+    font-size: 13px;
+  }
+
+  .att-btn {
+    width: 40px;
+    height: 38px;
+    font-size: 11px;
+  }
+
+  .att-mark-all-btn {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+
+  .att-month-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Setup redesign — mobile */
+  .setup-tab {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+
+  .setup-list-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }

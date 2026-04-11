@@ -482,9 +482,11 @@ function App() {
   // Attendance UI
   const [attendanceView, setAttendanceView] = useState("today");
   const [correctionMode, setCorrectionMode] = useState(false);
-  const [markAllConfirming, setMarkAllConfirming] = useState(false);
   const [savingCells, setSavingCells] = useState(new Set());
   const [savedCells, setSavedCells] = useState(new Set());
+
+  // Setup UI
+  const [setupTab, setSetupTab] = useState("company");
 
   // Chat
   const [chatMessages, setChatMessages] = useState([
@@ -769,9 +771,32 @@ function App() {
     }
   }
 
-  async function handleMarkAllPresent() {
-    setMarkAllConfirming(false);
-    const rows = attendanceRows;
+  async function handleSetAttendance(workerId, day, status, options = {}) {
+    const dayKey = String(day);
+    const allowPastEdit = Boolean(options.overridePastEdit);
+    const dayNum = Number(dayKey);
+    if (dayNum > todayDay) return;
+    if (dayNum < todayDay && !allowPastEdit) return;
+    clearMessages();
+    const cellKey = `${workerId}-${dayKey}`;
+    const curAtt = attendance[workerId] || createDefaultAttendanceMap(month, {});
+    if (curAtt[dayKey] === status) return; // already this status
+    setAttendance((cur) => ({ ...cur, [workerId]: { ...curAtt, [dayKey]: status } }));
+    setSavingCells((prev) => { const n = new Set(prev); n.add(cellKey); return n; });
+    try {
+      const response = await updateAttendance({ month, workerId, day: dayKey, status, overridePastEdit: allowPastEdit });
+      setAttendance(response.attendance);
+      setSavedCells((prev) => { const n = new Set(prev); n.add(cellKey); return n; });
+      setTimeout(() => setSavedCells((prev) => { const n = new Set(prev); n.delete(cellKey); return n; }), 1200);
+    } catch (attError) {
+      setError(attError.message);
+      await loadBootstrap(month);
+    } finally {
+      setSavingCells((prev) => { const n = new Set(prev); n.delete(cellKey); return n; });
+    }
+  }
+
+  async function handleMarkAllPresentForRows(rows) {
     let changed = 0;
     for (const row of rows) {
       if (row.attendance[todayDayKey] !== "P") {
@@ -784,7 +809,11 @@ function App() {
         } catch (_) { /* silent */ }
       }
     }
-    showToast(`${rows.length} workers ko present mark kiya!`, "success");
+    if (changed > 0) showToast(`${changed} workers ko present mark kiya!`, "success");
+  }
+
+  async function handleMarkAllPresent() {
+    await handleMarkAllPresentForRows(attendanceRows);
   }
 
   /* ── Chat handler ─────────────────────────────── */
@@ -983,103 +1012,98 @@ function App() {
 
     return (
       <div className="stack">
-        {/* ── First-time onboarding ── */}
+        {/* First-time banner — simple, no emoji clutter */}
         {isFirstTime && (
-          <div className="surface panel onboarding-card">
-            <div className="onboarding-icon">🚀</div>
-            <h3 className="onboarding-title">Setup shuru karein!</h3>
-            <p className="onboarding-sub">Pehle apna site add karo, phir workers. Bas 2 step mein sab ready.</p>
-            <div className="onboarding-steps">
-              <div className="onboarding-step">
-                <span className="onboarding-step-num">1</span>
-                <div>
-                  <strong>Site add karo</strong>
-                  <p>Jahan kaam chal raha hai — site ka naam aur client daalein.</p>
-                </div>
-              </div>
-              <div className="onboarding-step">
-                <span className="onboarding-step-num">2</span>
-                <div>
-                  <strong>Workers add karo</strong>
-                  <p>Quick Add se ek baar mein poori crew paste karo.</p>
-                </div>
-              </div>
-            </div>
+          <div className="setup-start-banner">
+            <strong>Pehli baar setup kar rahe hain?</strong>
+            <span>Step 1: Sites tab mein site add karein. Step 2: Workers tab mein crew add karein.</span>
           </div>
         )}
 
-        {/* ── Company Settings (collapsed) ── */}
-        <div className="surface panel">
-          <CollapsibleSection title={`⚙ Company Settings — ${company.businessName || "Not set"}`} defaultOpen={isFirstTime && !company.businessName}>
-            <form onSubmit={handleSaveCompany}>
-              <CollapsibleSection title="Business Info" defaultOpen={true}>
-                <div className="field-grid">
-                  <Field label="Business Name">
-                    <input value={companyForm.businessName} onChange={(e) => updateCompanyField("businessName", e.target.value)} placeholder="Shree Ganesh Labour Contractor" />
-                  </Field>
-                  <Field label="Owner Name">
-                    <input value={companyForm.ownerName} onChange={(e) => updateCompanyField("ownerName", e.target.value)} />
-                  </Field>
-                  <Field label="Phone">
-                    <input value={companyForm.phone} onChange={(e) => updateCompanyField("phone", e.target.value)} inputMode="tel" />
-                  </Field>
-                  <Field label="Email">
-                    <input value={companyForm.email} onChange={(e) => updateCompanyField("email", e.target.value)} inputMode="email" />
-                  </Field>
-                  <Field label="Address" full>
-                    <textarea value={companyForm.address} onChange={(e) => updateCompanyField("address", e.target.value)} />
-                  </Field>
-                </div>
-              </CollapsibleSection>
+        {/* Setup tabs */}
+        <div className="setup-tab-bar">
+          <button className={`setup-tab${setupTab === "company" ? " active" : ""}`} type="button" onClick={() => setSetupTab("company")}>
+            Company
+          </button>
+          <button className={`setup-tab${setupTab === "sites" ? " active" : ""}`} type="button" onClick={() => setSetupTab("sites")}>
+            Sites {sites.length > 0 && <span className="setup-tab-count">{sites.length}</span>}
+          </button>
+          <button className={`setup-tab${setupTab === "workers" ? " active" : ""}`} type="button" onClick={() => setSetupTab("workers")}>
+            Workers {workers.length > 0 && <span className="setup-tab-count">{workers.length}</span>}
+          </button>
+        </div>
 
-              <CollapsibleSection title="Registration Numbers">
-                <div className="field-grid">
-                  <Field label="GSTIN">
-                    <input value={companyForm.gstin} onChange={(e) => updateCompanyField("gstin", e.target.value)} placeholder="27XXXXX..." />
-                  </Field>
-                  <Field label="CLRA License">
-                    <input value={companyForm.clraLicense} onChange={(e) => updateCompanyField("clraLicense", e.target.value)} />
-                  </Field>
-                  <Field label="PF Registration">
-                    <input value={companyForm.pfRegistration} onChange={(e) => updateCompanyField("pfRegistration", e.target.value)} />
-                  </Field>
-                  <Field label="ESI Registration">
-                    <input value={companyForm.esiRegistration} onChange={(e) => updateCompanyField("esiRegistration", e.target.value)} />
-                  </Field>
-                </div>
-              </CollapsibleSection>
+        {/* ── COMPANY TAB ── */}
+        {setupTab === "company" && (
+          <div className="surface panel">
+            <SectionHeader title="Company Settings" sub="Aapki company ki basic details — invoice aur payroll mein use hoti hain." />
+            <form onSubmit={handleSaveCompany} className="stack">
 
-              <CollapsibleSection title="Rate Settings (change mat karo bina zaroorat ke)">
-                <div className="field-grid">
-                  <Field label="Service Charge %">
-                    <input type="number" step="0.01" value={companyForm.serviceChargeRate} onChange={(e) => updateCompanyField("serviceChargeRate", e.target.value)} />
-                  </Field>
-                  <Field label="GST %">
-                    <input type="number" step="0.01" value={companyForm.gstRate} onChange={(e) => updateCompanyField("gstRate", e.target.value)} />
-                  </Field>
-                  <Field label="PF Employee %">
-                    <input type="number" step="0.01" value={companyForm.pfEmployeeRate} onChange={(e) => updateCompanyField("pfEmployeeRate", e.target.value)} />
-                  </Field>
-                  <Field label="PF Employer %">
-                    <input type="number" step="0.01" value={companyForm.pfEmployerRate} onChange={(e) => updateCompanyField("pfEmployerRate", e.target.value)} />
-                  </Field>
-                  <Field label="PF Wage Cap">
-                    <input type="number" value={companyForm.pfCap} onChange={(e) => updateCompanyField("pfCap", e.target.value)} />
-                  </Field>
-                  <Field label="ESI Employee %">
-                    <input type="number" step="0.01" value={companyForm.esiEmployeeRate} onChange={(e) => updateCompanyField("esiEmployeeRate", e.target.value)} />
-                  </Field>
-                  <Field label="ESI Employer %">
-                    <input type="number" step="0.01" value={companyForm.esiEmployerRate} onChange={(e) => updateCompanyField("esiEmployerRate", e.target.value)} />
-                  </Field>
-                  <Field label="ESI Threshold">
-                    <input type="number" value={companyForm.esiThreshold} onChange={(e) => updateCompanyField("esiThreshold", e.target.value)} />
-                  </Field>
-                  <Field label="OT Multiplier">
-                    <input type="number" step="0.01" value={companyForm.overtimeMultiplier} onChange={(e) => updateCompanyField("overtimeMultiplier", e.target.value)} />
-                  </Field>
-                </div>
-              </CollapsibleSection>
+              <div className="setup-section-label">Business Info</div>
+              <div className="field-grid">
+                <Field label="Business Name">
+                  <input value={companyForm.businessName} onChange={(e) => updateCompanyField("businessName", e.target.value)} placeholder="Shree Ganesh Labour Contractor" />
+                </Field>
+                <Field label="Owner Name">
+                  <input value={companyForm.ownerName} onChange={(e) => updateCompanyField("ownerName", e.target.value)} />
+                </Field>
+                <Field label="Phone">
+                  <input value={companyForm.phone} onChange={(e) => updateCompanyField("phone", e.target.value)} inputMode="tel" />
+                </Field>
+                <Field label="Email">
+                  <input value={companyForm.email} onChange={(e) => updateCompanyField("email", e.target.value)} inputMode="email" />
+                </Field>
+                <Field label="Address" full>
+                  <textarea value={companyForm.address} onChange={(e) => updateCompanyField("address", e.target.value)} />
+                </Field>
+              </div>
+
+              <div className="setup-section-label">Registration Numbers</div>
+              <div className="field-grid">
+                <Field label="GSTIN">
+                  <input value={companyForm.gstin} onChange={(e) => updateCompanyField("gstin", e.target.value)} placeholder="27XXXXX..." />
+                </Field>
+                <Field label="CLRA License">
+                  <input value={companyForm.clraLicense} onChange={(e) => updateCompanyField("clraLicense", e.target.value)} />
+                </Field>
+                <Field label="PF Registration">
+                  <input value={companyForm.pfRegistration} onChange={(e) => updateCompanyField("pfRegistration", e.target.value)} />
+                </Field>
+                <Field label="ESI Registration">
+                  <input value={companyForm.esiRegistration} onChange={(e) => updateCompanyField("esiRegistration", e.target.value)} />
+                </Field>
+              </div>
+
+              <div className="setup-section-label">Rate Settings <span className="setup-section-note">(zaroorat na ho toh change mat karo)</span></div>
+              <div className="field-grid">
+                <Field label="Service Charge %">
+                  <input type="number" step="0.01" value={companyForm.serviceChargeRate} onChange={(e) => updateCompanyField("serviceChargeRate", e.target.value)} />
+                </Field>
+                <Field label="GST %">
+                  <input type="number" step="0.01" value={companyForm.gstRate} onChange={(e) => updateCompanyField("gstRate", e.target.value)} />
+                </Field>
+                <Field label="PF Employee %">
+                  <input type="number" step="0.01" value={companyForm.pfEmployeeRate} onChange={(e) => updateCompanyField("pfEmployeeRate", e.target.value)} />
+                </Field>
+                <Field label="PF Employer %">
+                  <input type="number" step="0.01" value={companyForm.pfEmployerRate} onChange={(e) => updateCompanyField("pfEmployerRate", e.target.value)} />
+                </Field>
+                <Field label="PF Wage Cap">
+                  <input type="number" value={companyForm.pfCap} onChange={(e) => updateCompanyField("pfCap", e.target.value)} />
+                </Field>
+                <Field label="ESI Employee %">
+                  <input type="number" step="0.01" value={companyForm.esiEmployeeRate} onChange={(e) => updateCompanyField("esiEmployeeRate", e.target.value)} />
+                </Field>
+                <Field label="ESI Employer %">
+                  <input type="number" step="0.01" value={companyForm.esiEmployerRate} onChange={(e) => updateCompanyField("esiEmployerRate", e.target.value)} />
+                </Field>
+                <Field label="ESI Threshold">
+                  <input type="number" value={companyForm.esiThreshold} onChange={(e) => updateCompanyField("esiThreshold", e.target.value)} />
+                </Field>
+                <Field label="OT Multiplier">
+                  <input type="number" step="0.01" value={companyForm.overtimeMultiplier} onChange={(e) => updateCompanyField("overtimeMultiplier", e.target.value)} />
+                </Field>
+              </div>
 
               <div className="button-row mt-18">
                 <button className="btn" type="submit" disabled={busy}>
@@ -1087,20 +1111,22 @@ function App() {
                 </button>
               </div>
             </form>
-          </CollapsibleSection>
-        </div>
+          </div>
+        )}
 
-        {/* ── Sites & Workers ── */}
-        <div className="split">
-          {/* Sites */}
+        {/* ── SITES TAB ── */}
+        {setupTab === "sites" && (
           <div className="surface panel">
-            <SectionHeader title="Sites" sub="Create sites first, then assign workers." help="A site keeps workers, payroll, and invoices grouped correctly." />
+            <SectionHeader
+              title={editingSiteId ? "Site edit karein" : "New site add karein"}
+              sub="Site = ek kaam ki jagah. Pehle site banao, phir workers assign karo."
+            />
             <form className="stack" onSubmit={handleSaveSite}>
               <div className="field-grid">
                 <Field label="Site Name">
-                  <input value={siteForm.name} onChange={(e) => updateSiteField("name", e.target.value)} placeholder="Tema India" />
+                  <input value={siteForm.name} onChange={(e) => updateSiteField("name", e.target.value)} placeholder="Tema India" autoFocus />
                 </Field>
-                <Field label="Client Name">
+                <Field label="Client / Company Name">
                   <input value={siteForm.clientName} onChange={(e) => updateSiteField("clientName", e.target.value)} placeholder="Tema India Pvt Ltd" />
                 </Field>
                 <Field label="Location" full>
@@ -1109,153 +1135,152 @@ function App() {
               </div>
               <div className="button-row">
                 <button className="btn" type="submit" disabled={busy}>{editingSiteId ? "Update site" : "Add site"}</button>
-                {editingSiteId ? (
+                {editingSiteId && (
                   <button className="btn-ghost" type="button" onClick={() => { setEditingSiteId(""); setSiteForm(emptySiteForm()); }}>Cancel</button>
-                ) : null}
+                )}
               </div>
             </form>
 
-            <div className="stack mt-18">
-              {sites.length ? sites.map((site) => (
-                <div className="list-card" key={site.id}>
-                  <div className="list-header">
-                    <div>
-                      <h4>{site.name}</h4>
-                      <p>{site.clientName || "No client name"}</p>
+            <div className="setup-divider" />
+
+            {sites.length ? (
+              <div className="stack">
+                {sites.map((site) => (
+                  <div className="setup-list-row" key={site.id}>
+                    <div className="setup-list-row-info">
+                      <span className="setup-list-row-title">{site.name}</span>
+                      <span className="setup-list-row-sub">{site.clientName || "No client"} {site.location ? `— ${site.location}` : ""}</span>
                     </div>
                     {deletingSiteId === site.id ? (
                       <div className="confirm-inline-cell">
-                        <span>Delete karein?</span>
+                        <span>Delete?</span>
                         <button className="btn-ghost btn-danger btn-sm" type="button" onClick={() => handleDeleteSite(site.id)}>Haan</button>
                         <button className="btn-ghost btn-sm" type="button" onClick={() => setDeletingSiteId("")}>Nahi</button>
                       </div>
                     ) : (
-                      <div className="button-row">
-                        <button className="btn-ghost" type="button" onClick={() => { setEditingSiteId(site.id); setSiteForm({ name: site.name, clientName: site.clientName, location: site.location }); }}>Edit</button>
-                        <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteSite(site.id)}>Delete</button>
+                      <div className="button-row tight">
+                        <button className="btn-ghost btn-sm" type="button" onClick={() => { setEditingSiteId(site.id); setSiteForm({ name: site.name, clientName: site.clientName, location: site.location }); pageRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button>
+                        <button className="btn-ghost btn-danger btn-sm" type="button" onClick={() => handleDeleteSite(site.id)}>Delete</button>
                       </div>
                     )}
                   </div>
-                  <p className="muted mt-10">{site.location || "No location set"}</p>
-                </div>
-              )) : (
-                <div className="empty-state">
-                  <div className="empty-state-icon">📍</div>
-                  <h4>Koi site nahi hai</h4>
-                  <p>Pehla site add karein taaki workers assign ho sakein.</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <h4>Koi site nahi hai</h4>
+                <p>Upar form mein site add karein.</p>
+              </div>
+            )}
           </div>
+        )}
 
-          {/* Workers */}
+        {/* ── WORKERS TAB ── */}
+        {setupTab === "workers" && (
           <div className="surface panel">
-            <SectionHeader
-              title="Workers"
-              sub="Quick add fastest hai bade crews ke liye."
-              help="For 50-100 workers: create sites, paste names in quick add, then use search for edits."
-              actions={<div className="status-pill">{visibleWorkers.length} shown</div>}
-            />
-
+            {/* Worker count summary */}
             {workers.length > 0 && (
               <div className="workers-count-summary">
-                <span><strong>{workers.length}</strong> total workers</span>
-                <span>(<strong>{activeCount}</strong> active, <strong>{inactiveCount}</strong> inactive)</span>
+                <span><strong>{workers.length}</strong> total</span>
+                <span><strong>{activeCount}</strong> active</span>
+                <span><strong>{inactiveCount}</strong> inactive</span>
                 {Object.entries(siteCountMap).map(([sn, cnt]) => (
                   <span key={sn} className="site-count-chip">{sn}: {cnt}</span>
                 ))}
               </div>
             )}
 
-            {/* Quick Add */}
-            <div className="mini-card quick-add-card">
-              <SectionHeader title="Quick Add Crew" sub="Paste one name per line. Same role, wage, and site applied to all." help="Fastest way to load a real contractor crew." />
-              <form className="stack" onSubmit={handleBulkAddWorkers}>
-                <Field label="Worker Names" full hint="Ek naam per line">
-                  <textarea
-                    value={bulkWorkerForm.names}
-                    onChange={(e) => updateBulkWorkerField("names", e.target.value)}
-                    placeholder={"Ramesh Patel\nSuresh Yadav\nDinesh Kumar"}
-                  />
+            {sites.length === 0 && (
+              <div className="setup-warning-bar">
+                Pehle Sites tab mein site add karo — workers ko site se assign karna zaroori hai.
+                <button className="btn-ghost btn-sm" type="button" onClick={() => setSetupTab("sites")}>Sites tab kholo</button>
+              </div>
+            )}
+
+            {/* Quick Add — primary method */}
+            <div className="setup-section-label">Crew bulk add <span className="setup-section-note">(ek naam per line)</span></div>
+            <form className="stack" onSubmit={handleBulkAddWorkers}>
+              <Field label="Worker Names" full hint="Ek naam per line paste karo">
+                <textarea
+                  value={bulkWorkerForm.names}
+                  onChange={(e) => updateBulkWorkerField("names", e.target.value)}
+                  placeholder={"Ramesh Patel\nSuresh Yadav\nDinesh Kumar"}
+                  rows={4}
+                />
+              </Field>
+              {bulkWorkerForm.names.trim() && (
+                <p className="field-hint field-hint-count">
+                  {parseBulkWorkerNames(bulkWorkerForm.names).length} names
+                </p>
+              )}
+              <div className="field-grid">
+                <Field label="Role">
+                  <input value={bulkWorkerForm.role} onChange={(e) => updateBulkWorkerField("role", e.target.value)} placeholder="Fitter" />
                 </Field>
-                {bulkWorkerForm.names.trim() && (
-                  <p className="field-hint field-hint-count">
-                    {parseBulkWorkerNames(bulkWorkerForm.names).length} names entered
-                  </p>
-                )}
+                <Field label="Daily Wage">
+                  <input type="number" value={bulkWorkerForm.dailyWage} onChange={(e) => updateBulkWorkerField("dailyWage", e.target.value)} />
+                </Field>
+                <Field label="Site">
+                  <select value={bulkWorkerForm.siteId} onChange={(e) => updateBulkWorkerField("siteId", e.target.value)}>
+                    <option value="">Unassigned</option>
+                    {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="button-row">
+                <button className="btn" type="submit" disabled={busy}>Add crew</button>
+              </div>
+            </form>
+
+            <div className="setup-divider" />
+
+            {/* Single worker form */}
+            <CollapsibleSection title={editingWorkerId ? "Worker edit karein" : "Single worker add karein"} defaultOpen={Boolean(editingWorkerId)}>
+              <form className="stack" onSubmit={handleSaveWorker}>
                 <div className="field-grid">
-                  <Field label="Common Role">
-                    <input value={bulkWorkerForm.role} onChange={(e) => updateBulkWorkerField("role", e.target.value)} />
+                  <Field label="Worker Name">
+                    <input value={workerForm.name} onChange={(e) => updateWorkerField("name", e.target.value)} placeholder="Ramesh Patel" />
+                  </Field>
+                  <Field label="Role">
+                    <input value={workerForm.role} onChange={(e) => updateWorkerField("role", e.target.value)} placeholder="Fitter" />
                   </Field>
                   <Field label="Daily Wage">
-                    <input type="number" value={bulkWorkerForm.dailyWage} onChange={(e) => updateBulkWorkerField("dailyWage", e.target.value)} />
+                    <input type="number" value={workerForm.dailyWage} onChange={(e) => updateWorkerField("dailyWage", e.target.value)} placeholder="650" />
                   </Field>
                   <Field label="Site">
-                    <select value={bulkWorkerForm.siteId} onChange={(e) => updateBulkWorkerField("siteId", e.target.value)}>
+                    <select value={workerForm.siteId} onChange={(e) => updateWorkerField("siteId", e.target.value)}>
                       <option value="">Unassigned</option>
                       {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </Field>
+                  <Field label="UAN">
+                    <input value={workerForm.uan} onChange={(e) => updateWorkerField("uan", e.target.value)} />
+                  </Field>
+                  <Field label="ESI Number">
+                    <input value={workerForm.esiNumber} onChange={(e) => updateWorkerField("esiNumber", e.target.value)} />
+                  </Field>
                   <Field label="Status">
-                    <select value={bulkWorkerForm.active ? "active" : "inactive"} onChange={(e) => updateBulkWorkerField("active", e.target.value === "active")}>
+                    <select value={workerForm.active ? "active" : "inactive"} onChange={(e) => updateWorkerField("active", e.target.value === "active")}>
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select>
                   </Field>
                 </div>
                 <div className="button-row">
-                  <button className="btn" type="submit" disabled={busy}>Add pasted crew</button>
+                  <button className="btn" type="submit" disabled={busy}>{editingWorkerId ? "Update worker" : "Add worker"}</button>
+                  {editingWorkerId && (
+                    <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(""); setWorkerForm(emptyWorkerForm()); }}>Cancel</button>
+                  )}
                 </div>
               </form>
-            </div>
+            </CollapsibleSection>
 
-            {/* Single Worker Form */}
-            <div className="mt-18">
-              <CollapsibleSection title={editingWorkerId ? "✏ Edit Worker" : "Ek worker add karo (single)"} defaultOpen={Boolean(editingWorkerId)}>
-                <form className="stack" onSubmit={handleSaveWorker}>
-                  <div className="field-grid">
-                    <Field label="Worker Name">
-                      <input value={workerForm.name} onChange={(e) => updateWorkerField("name", e.target.value)} placeholder="Ramesh Patel" />
-                    </Field>
-                    <Field label="Role">
-                      <input value={workerForm.role} onChange={(e) => updateWorkerField("role", e.target.value)} placeholder="Fitter" />
-                    </Field>
-                    <Field label="Daily Wage">
-                      <input type="number" value={workerForm.dailyWage} onChange={(e) => updateWorkerField("dailyWage", e.target.value)} placeholder="650" />
-                    </Field>
-                    <Field label="Site">
-                      <select value={workerForm.siteId} onChange={(e) => updateWorkerField("siteId", e.target.value)}>
-                        <option value="">Unassigned</option>
-                        {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </Field>
-                    <Field label="UAN">
-                      <input value={workerForm.uan} onChange={(e) => updateWorkerField("uan", e.target.value)} />
-                    </Field>
-                    <Field label="ESI Number">
-                      <input value={workerForm.esiNumber} onChange={(e) => updateWorkerField("esiNumber", e.target.value)} />
-                    </Field>
-                    <Field label="Status">
-                      <select value={workerForm.active ? "active" : "inactive"} onChange={(e) => updateWorkerField("active", e.target.value === "active")}>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                      </select>
-                    </Field>
-                  </div>
-                  <div className="button-row">
-                    <button className="btn" type="submit" disabled={busy}>{editingWorkerId ? "Update worker" : "Add worker"}</button>
-                    {editingWorkerId ? (
-                      <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(""); setWorkerForm(emptyWorkerForm()); }}>Cancel</button>
-                    ) : null}
-                  </div>
-                </form>
-              </CollapsibleSection>
-            </div>
+            <div className="setup-divider" />
 
             {/* Worker Search */}
             <div className="workers-toolbar">
-              <Field label="Search Workers" full>
-                <input value={workerSearch} onChange={(e) => setWorkerSearch(e.target.value)} placeholder="Naam, role, ya site se dhundo..." />
+              <Field label="" full>
+                <input value={workerSearch} onChange={(e) => setWorkerSearch(e.target.value)} placeholder="Worker naam, role, ya site se dhundo..." />
               </Field>
             </div>
 
@@ -1281,9 +1306,9 @@ function App() {
                         <tr key={worker.id} className={isDeleting ? "confirm-row" : ""}>
                           <td>
                             <div>{worker.name}</div>
-                            <div className="muted table-subtext">UAN {worker.uan || "not set"} | ESI {worker.esiNumber || "not set"}</div>
+                            <div className="muted table-subtext">UAN {worker.uan || "—"} | ESI {worker.esiNumber || "—"}</div>
                           </td>
-                          <td>{worker.role || "No role"}</td>
+                          <td>{worker.role || "—"}</td>
                           <td>{ws?.name || "Unassigned"}</td>
                           <td className="mono">{formatCurrency(worker.dailyWage)}</td>
                           <td>{worker.active ? "Active" : "Inactive"}</td>
@@ -1309,9 +1334,8 @@ function App() {
               </div>
             ) : (
               <div className="empty-state mt-16">
-                <div className="empty-state-icon">👷</div>
                 <h4>Koi worker nahi mila</h4>
-                <p>Search ya site filter change karein, ya upar se worker add karein.</p>
+                <p>Search change karein, ya upar se worker add karein.</p>
               </div>
             )}
 
@@ -1344,7 +1368,7 @@ function App() {
                         </div>
                       ) : (
                         <div className="worker-card-actions">
-                          <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(worker.id); setWorkerForm({ name: worker.name, role: worker.role, dailyWage: worker.dailyWage, uan: worker.uan, esiNumber: worker.esiNumber, siteId: worker.siteId, active: worker.active }); pageRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button>
+                          <button className="btn-ghost" type="button" onClick={() => { setEditingWorkerId(worker.id); setWorkerForm({ name: worker.name, role: worker.role, dailyWage: worker.dailyWage, uan: worker.uan, esiNumber: worker.esiNumber, siteId: worker.siteId, active: worker.active }); setSetupTab("workers"); pageRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}>Edit</button>
                           <button className="btn-ghost btn-danger" type="button" onClick={() => handleDeleteWorker(worker.id)}>Delete</button>
                         </div>
                       )}
@@ -1353,172 +1377,163 @@ function App() {
                 })}
               </div>
             )}
-          </div>
-        </div>
 
-        {/* ── CSV Import (collapsed by default) ── */}
-        <div className="surface panel">
-          <CollapsibleSection title="CSV se workers load karo (advanced)">
-            <div className="import-templates">
-              <a className="btn-ghost" href="data:text/csv;charset=utf-8,Site Name,Client Name,Location%0ATema India,Tema India Pvt Ltd,Achhad Talasari" download="sites_template.csv">Download sites template</a>
-              <a className="btn-ghost" href="data:text/csv;charset=utf-8,Name,Role,Daily Wage,UAN,ESI Number,Site Name%0ARamesh Patel,Fitter,650,100123456789,3112345678,Tema India" download="workers_template.csv">Download workers template</a>
-            </div>
-            <div className="split import-grid">
-              <Field label="Sites CSV"><input type="file" accept=".csv,text/csv" onChange={handleSitesFileChange} /></Field>
-              <Field label="Workers CSV"><input type="file" accept=".csv,text/csv" onChange={handleWorkersFileChange} /></Field>
-            </div>
-            <div className="button-row mt-12">
-              <button className="btn-ghost" type="button" onClick={handlePreviewImport} disabled={!importSitesText && !importWorkersText}>Preview import</button>
-            </div>
-            {importPreview ? (
-              <div className="import-preview stack">
-                <p><strong>{importPreview.sites.length}</strong> sites aur <strong>{importPreview.workers.length}</strong> workers import ke liye ready hain.</p>
-                {importPreview.workers.length ? (
-                  <div className="mini-card">
-                    <h4>Workers</h4>
-                    {importPreview.workers.slice(0, 10).map((w, i) => (
-                      <p key={`${w.name}-${i}`}>{w.name} ({w.role || "No role"}) — {w.siteName || "Unassigned"} — {w.dailyWage}/day</p>
-                    ))}
-                    {importPreview.workers.length > 10 ? <p className="muted">...aur {importPreview.workers.length - 10} workers</p> : null}
+            {/* CSV Import */}
+            <div className="setup-divider" />
+            <CollapsibleSection title="CSV se workers load karo (advanced)">
+              <div className="import-templates">
+                <a className="btn-ghost" href="data:text/csv;charset=utf-8,Site Name,Client Name,Location%0ATema India,Tema India Pvt Ltd,Achhad Talasari" download="sites_template.csv">Sites template</a>
+                <a className="btn-ghost" href="data:text/csv;charset=utf-8,Name,Role,Daily Wage,UAN,ESI Number,Site Name%0ARamesh Patel,Fitter,650,100123456789,3112345678,Tema India" download="workers_template.csv">Workers template</a>
+              </div>
+              <div className="split import-grid">
+                <Field label="Sites CSV"><input type="file" accept=".csv,text/csv" onChange={handleSitesFileChange} /></Field>
+                <Field label="Workers CSV"><input type="file" accept=".csv,text/csv" onChange={handleWorkersFileChange} /></Field>
+              </div>
+              <div className="button-row mt-12">
+                <button className="btn-ghost" type="button" onClick={handlePreviewImport} disabled={!importSitesText && !importWorkersText}>Preview import</button>
+              </div>
+              {importPreview ? (
+                <div className="import-preview stack">
+                  <p><strong>{importPreview.sites.length}</strong> sites aur <strong>{importPreview.workers.length}</strong> workers import ready.</p>
+                  {importPreview.workers.length ? (
+                    <div className="mini-card">
+                      <h4>Workers preview</h4>
+                      {importPreview.workers.slice(0, 10).map((w, i) => (
+                        <p key={`${w.name}-${i}`}>{w.name} ({w.role || "No role"}) — {w.siteName || "Unassigned"} — {w.dailyWage}/day</p>
+                      ))}
+                      {importPreview.workers.length > 10 ? <p className="muted">...aur {importPreview.workers.length - 10} workers</p> : null}
+                    </div>
+                  ) : null}
+                  <div className="button-row">
+                    <button className="btn" type="button" onClick={handleRunImport} disabled={importBusy}>{importBusy ? "Importing..." : "Confirm import"}</button>
+                    <button className="btn-ghost" type="button" onClick={() => setImportPreview(null)}>Cancel</button>
                   </div>
-                ) : null}
-                <div className="button-row">
-                  <button className="btn" type="button" onClick={handleRunImport} disabled={importBusy}>{importBusy ? "Importing..." : "Confirm import"}</button>
-                  <button className="btn-ghost" type="button" onClick={() => setImportPreview(null)}>Cancel</button>
                 </div>
-              </div>
-            ) : null}
-          </CollapsibleSection>
-        </div>
+              ) : null}
+            </CollapsibleSection>
 
-        {/* Demo Data — for testing only */}
-        <div className="surface panel demo-section">
-          <CollapsibleSection title="Demo data load karo (testing ke liye)">
-            <p className="demo-section-note">Yeh sirf testing ke liye hai. 72 demo workers aur 3 sites load honge.</p>
-            {loadDemoConfirming ? (
-              <div className="demo-confirm-row">
-                <span>72 demo workers load karein?</span>
-                <button className="btn btn-sm" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Haan, load karo</button>
-                <button className="btn-ghost btn-sm" type="button" onClick={() => setLoadDemoConfirming(false)}>Nahi</button>
-              </div>
-            ) : (
-              <button className="btn-ghost" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Load 72 demo workers</button>
-            )}
-          </CollapsibleSection>
-        </div>
+            {/* Demo Data */}
+            <CollapsibleSection title="Demo data load karo (testing ke liye)">
+              <p className="demo-section-note">72 demo workers aur 3 sites load honge — sirf testing ke liye.</p>
+              {loadDemoConfirming ? (
+                <div className="demo-confirm-row">
+                  <span>72 demo workers load karein?</span>
+                  <button className="btn btn-sm" type="button" onClick={handleLoadDemoCrew} disabled={busy}>Haan, load karo</button>
+                  <button className="btn-ghost btn-sm" type="button" onClick={() => setLoadDemoConfirming(false)}>Nahi</button>
+                </div>
+              ) : (
+                <button className="btn-ghost" type="button" onClick={() => setLoadDemoConfirming(true)} disabled={busy}>Load demo workers</button>
+              )}
+            </CollapsibleSection>
+          </div>
+        )}
       </div>
     );
   }
 
   function renderAttendance() {
-    const suggestions = CHAT_SUGGESTIONS.attendance;
+    // Format date for header
+    const todayDateStr = (() => {
+      const d = new Date(Number(month.split("-")[0]), Number(month.split("-")[1]) - 1, todayDay);
+      return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
+    })();
 
     return (
       <div className="stack">
-        {/* View Toggle */}
-        <div className="attendance-view-header">
+        {/* Header row: date context + view toggle */}
+        <div className="att-page-header">
+          <div className="att-date-context">
+            <span className="att-date-label">{todayDateStr}</span>
+            <span className="att-day-badge">Day {todayDay}</span>
+          </div>
           <div className="attendance-view-tabs">
             <button className={`attendance-view-tab${attendanceView === "today" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("today")}>
-              ✔ Aaj ki haziri
+              Aaj ki haziri
             </button>
             <button className={`attendance-view-tab${attendanceView === "month" ? " active" : ""}`} type="button" onClick={() => setAttendanceView("month")}>
-              📅 Poora mahina
+              Mahina register
             </button>
-          </div>
-          <div className="hero-tags">
-            <span className="status-pill">Day {todayDay}</span>
-            <span className="status-pill">{todaySummary.P} present</span>
-            <span className="status-pill">{todaySummary.OT} OT</span>
           </div>
         </div>
 
-        {/* TODAY BOARD */}
+        {/* TODAY VIEW */}
         {attendanceView === "today" && (
           <div className="surface panel">
-            <SectionHeader
-              eyebrow="Daily attendance first"
-              title="Aaj ki haziri"
-              sub="Har worker ka status tap karke change karein — P, A, HD, OT, ya WO."
-              help="Past dates locked hain normal mode mein. Purani dates ke liye correction mode use karein."
-            />
-
-            {/* Summary Bar */}
-            <div className="att-summary-bar">
+            {/* Summary strip */}
+            <div className="att-summary-strip">
               {["P", "A", "HD", "OT", "WO"].map((s) => (
                 <span key={s} className={`att-chip att-chip-${s}`}>
-                  {s}: {todaySummary[s] || 0}
+                  {s} {todaySummary[s] || 0}
                 </span>
               ))}
-              <span className="att-chip att-chip-total">
-                Total: {attendanceRows.length}
-              </span>
+              <span className="att-chip att-chip-total">{attendanceRows.length} total</span>
+              <button className="att-mark-all-btn" type="button" onClick={handleMarkAllPresent} disabled={busy}>
+                Sabko Present
+              </button>
             </div>
 
-            {/* Mark All Present */}
-            <div className="mark-all-bar">
-              <span>Sabko present mark karein — ek tap mein!</span>
-              {markAllConfirming ? (
-                <div className="mark-all-confirm-inline">
-                  <span>{attendanceRows.length} workers ko present mark karein?</span>
-                  <button className="btn btn-sm" type="button" onClick={handleMarkAllPresent}>Haan, karo</button>
-                  <button className="btn-ghost btn-sm" type="button" onClick={() => setMarkAllConfirming(false)}>Nahi</button>
-                </div>
-              ) : (
-                <button className="btn btn-sm" type="button" onClick={() => setMarkAllConfirming(true)}>
-                  Sabko Present ✔
-                </button>
-              )}
+            {/* Legend strip */}
+            <div className="att-legend-strip">
+              {ATTENDANCE_CYCLE.map((s) => (
+                <span key={s} className={`att-legend-item status-${s}`}>{s} = {STATUS_HINDI[s]}</span>
+              ))}
             </div>
 
             {/* Search */}
-            <div className="attendance-toolbar">
-              <Field label="Worker dhundo" full>
-                <input value={attendanceSearch} onChange={(e) => setAttendanceSearch(e.target.value)} placeholder="Naam, role, ya site..." />
-              </Field>
+            <div className="att-search-row">
+              <input
+                className="att-search-input"
+                value={attendanceSearch}
+                onChange={(e) => setAttendanceSearch(e.target.value)}
+                placeholder="Worker naam se dhundo..."
+              />
             </div>
 
-            {/* Legend */}
-            <div className="legend-row">
-              {ATTENDANCE_CYCLE.map((s) => (
-                <span key={s} className={`legend-chip status-${s}`}>{s} — {STATUS_HINDI[s]}</span>
-              ))}
-            </div>
-
-            {/* Today Cards grouped by site */}
+            {/* Worker list grouped by site */}
             {attendanceRows.length ? (
-              <div className="mt-16">
+              <div className="att-list">
                 {siteGroups.map((group) => (
                   <div key={group.siteKey}>
-                    <div className="site-group-header">
-                      <span className="site-group-title">{group.siteName}</span>
-                      <span className="site-group-count">{group.rows.length} workers</span>
+                    <div className="att-site-header">
+                      <span className="att-site-name">{group.siteName}</span>
+                      <span className="att-site-count">{group.rows.length} workers</span>
+                      <button
+                        className="att-site-mark-all"
+                        type="button"
+                        onClick={() => handleMarkAllPresentForRows(group.rows)}
+                      >
+                        Sabko P
+                      </button>
                     </div>
-                    <div className="today-board">
-                      {group.rows.map((row) => {
-                        const cellKey = `${row.id}-${todayDayKey}`;
-                        const isSaving = savingCells.has(cellKey);
-                        const isSaved = savedCells.has(cellKey);
-                        const status = row.attendance[todayDayKey] || "A";
-                        return (
-                          <div className="today-card surface" key={`today-${row.id}`}>
-                            {isSaving && <span className="save-dot saving" title="Saving..." />}
-                            {!isSaving && isSaved && <span className="save-dot saved" title="Saved!" />}
-                            <div className="today-card-copy">
-                              <h4>{row.name}</h4>
-                              <p>{row.role || "No role"}</p>
-                            </div>
-                            <button
-                              className={`today-status-btn status-${status}`}
-                              type="button"
-                              onClick={() => handleToggleAttendance(row.id, todayDayKey)}
-                            >
-                              <span>{status}</span>
-                              <small className="status-label-hindi">{STATUS_HINDI[status]}</small>
-                            </button>
+                    {group.rows.map((row) => {
+                      const cellKey = `${row.id}-${todayDayKey}`;
+                      const isSaving = savingCells.has(cellKey);
+                      const isSaved = savedCells.has(cellKey);
+                      const status = row.attendance[todayDayKey] || "A";
+                      return (
+                        <div className="att-row" key={`att-${row.id}`}>
+                          <div className="att-row-info">
+                            <span className="att-row-name">{row.name}</span>
+                            <span className="att-row-role">{row.role || "—"}</span>
                           </div>
-                        );
-                      })}
-                    </div>
+                          <div className="att-row-btns">
+                            {ATTENDANCE_CYCLE.map((s) => (
+                              <button
+                                key={s}
+                                className={`att-btn att-btn-${s}${status === s ? " att-btn-active" : ""}`}
+                                type="button"
+                                onClick={() => handleSetAttendance(row.id, todayDayKey, s)}
+                                disabled={isSaving}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                          {isSaving && <span className="att-row-dot saving" />}
+                          {!isSaving && isSaved && <span className="att-row-dot saved" />}
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
@@ -1535,19 +1550,18 @@ function App() {
         {/* MONTH REGISTER */}
         {attendanceView === "month" && (
           <div className="surface panel">
-            <p className="month-register-mobile-hint">Yeh table bade screen pe best dikhta hai. Left-right scroll karein.</p>
-            <SectionHeader
-              title="Month Register"
-              sub={correctionMode ? "Correction mode ON hai. Purani dates edit ho sakti hain. Future dates locked rehenge." : "Sirf aaj ki date editable hai. Purani dates locked hain."}
-              help="Full register review ke liye visible hai. Safe editing restricted hai taaki galti se purani entries change na hoon."
-              actions={
-                <div className="button-row">
-                  <button className={`btn-ghost${correctionMode ? " active-toggle" : ""}`} type="button" onClick={() => setCorrectionMode((c) => !c)}>
-                    {correctionMode ? "Close correction mode" : "Enable past-date correction"}
-                  </button>
-                </div>
-              }
-            />
+            <div className="att-month-header">
+              <div>
+                <h3 className="section-title">Month Register — {month}</h3>
+                <p className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+                  {correctionMode ? "Correction mode ON — purani dates edit ho sakti hain." : "Sirf aaj ki date editable hai."}
+                </p>
+              </div>
+              <button className={`btn-ghost btn-sm${correctionMode ? " active-toggle" : ""}`} type="button" onClick={() => setCorrectionMode((c) => !c)}>
+                {correctionMode ? "Close correction" : "Past-date correction"}
+              </button>
+            </div>
+            <p className="month-register-mobile-hint">Left-right scroll karein — mobile pe horizontal scroll karo.</p>
             <div className="table-wrap keyboard-scroll mt-16" tabIndex={0} onKeyDown={handleScrollableKeyDown}>
               <table className="attendance-table">
                 <thead>
