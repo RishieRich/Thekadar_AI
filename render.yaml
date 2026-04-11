@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: node server.mjs
+    startCommand: node backend/index.mjs
     envVars:
       - key: GROQ_API_KEY
         sync: false

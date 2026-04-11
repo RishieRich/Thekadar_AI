@@ -6,7 +6,7 @@ import { handleRequest } from "./server/router.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const distDir = path.join(__dirname, "dist");
+const distDir = path.join(__dirname, "..", "dist");
 const PORT = Number(process.env.PORT || 8787);
 
 const MIME_TYPES = {

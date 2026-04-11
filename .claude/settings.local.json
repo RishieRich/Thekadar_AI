@@ -18,7 +18,20 @@
       "Bash(done)",
       "Bash(TOKEN=\"eyJpZCI6ImMxIiwiaWF0IjoxNzc1MDI2NjMwMzQ1fQ._eah5Rpca0KHDVSbuAtv8HbDVSVqqQ0xKp2usF4uSJg\" curl -s \"http://localhost:8787/api/bootstrap?month=2026-04\" -H \"Authorization: Bearer $TOKEN\")",
       "Bash(npx vite:*)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.get\\('attendance',{}\\).keys\\(\\)\\)\\)\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.get\\('attendance',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(mv src/App.jsx frontend/src/App.jsx)",
+      "Bash(mv src/api.js frontend/src/api.js)",
+      "Bash(mv src/app.css frontend/src/app.css)",
+      "Bash(mv src/main.jsx frontend/src/main.jsx)",
+      "Bash(mv index.html frontend/index.html)",
+      "Bash(mv grok.mjs backend/grok.mjs)",
+      "Bash(mv server.mjs backend/index.mjs)",
+      "Bash(mv server/router.mjs backend/server/router.mjs)",
+      "Bash(mv server/store.mjs backend/server/store.mjs)",
+      "Bash(mv server/kv.mjs backend/server/kv.mjs)",
+      "Bash(rmdir server:*)",
+      "Bash(rmdir src:*)",
+      "Bash(rmdir public:*)"
     ]
   }
 }

@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node --env-file-if-exists=.env server.mjs",
-    "start": "node --env-file-if-exists=.env server.mjs",
+    "server": "node --env-file-if-exists=.env backend/index.mjs",
+    "start": "node --env-file-if-exists=.env backend/index.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

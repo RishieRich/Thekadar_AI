@@ -27,7 +27,7 @@ import {
   monthKeyFromDate,
   monthLabel,
   parseMonthKey,
-} from "../shared/payroll.js";
+} from "../../shared/payroll.js";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "⊞" },

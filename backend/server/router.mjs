@@ -11,7 +11,7 @@ import {
   monthKeyFromDate,
   monthLabel,
   parseMonthKey,
-} from "../shared/payroll.js";
+} from "../../shared/payroll.js";
 
 // ---------------------------------------------------------------------------
 // HTTP helpers

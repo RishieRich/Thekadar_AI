@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { kvGet, kvSet } from "./kv.mjs";
-import { createDefaultAttendanceMap, monthKeyFromDate } from "../shared/payroll.js";
+import { createDefaultAttendanceMap, monthKeyFromDate } from "../../shared/payroll.js";
 
 // Per-contractor in-memory cache (keyed by contractorId)
 const cacheMap = new Map();
