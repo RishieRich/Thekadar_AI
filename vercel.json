@@ -3,5 +3,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/handler" }
-  ]
+  ],
+  "functions": {
+    "api/handler.js": {
+      "includeFiles": "node_modules/pdfkit/**"
+    }
+  }
 }
